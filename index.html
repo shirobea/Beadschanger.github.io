@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>画像の色変換</title>
+    <!-- Tailwind CSSを読み込み、モダンなデザインを実現します -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* フォントをInterに設定し、全体的にクリーンな印象を与えます */
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        /* キャンバス要素に基本スタイルを適用します */
+        /* width/heightはJavaScriptで設定し、最大サイズでアスペクト比を維持するようにします */
+        canvas {
+            display: block; /* 余分なマージンを削除 */
+            border-radius: 0.5rem; /* 角を丸くする */
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* 軽い影を追加 */
+            background-color: #f1f5f9; /* キャンバスの背景色 */
+            max-width: 100%; /* 親要素の幅に合わせて最大幅を設定 */
+            max-height: 100%; /* 親要素の高さに合わせて最大高さを設定 */
+            object-fit: contain; /* コンテナ内でアスペクト比を維持して収まるようにする */
+            /* 重要: canvas要素のスタイルはJavaScriptで動的に設定されるため、
+                     CSSでの固定幅/高さの指定はここではしません。 */
+        }
+        /* ドラッグ＆ドロップエリアのスタイル */
+        #drop-area {
+            border: 2px dashed #cbd5e0; /* 破線ボーダー */
+            border-radius: 0.75rem; /* 角を丸くする */
+            background-color: #f8fafc; /* 薄い背景色 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out; /* ホバー時のアニメーション */
+        }
+        /* ドラッグオーバー時のハイライトスタイル */
+        #drop-area.highlight {
+            background-color: #e0f2fe; /* 明るい青 */
+            border-color: #38b2ac; /* シアン */
+        }
+        /* ボタンにホバー効果とアクティブ効果を追加 */
+        button:active {
+            transform: translateY(1px);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-100 to-indigo-200 min-h-screen flex items-center justify-center py-10 px-4">
+    <div class="bg-white p-8 rounded-2xl shadow-xl max-w-4xl w-full">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-8">画像の色変換ツール</h1>
+
+        <!-- 画像アップロードエリア -->
+        <div id="drop-area" class="w-full h-48 mb-8 p-4 text-center text-gray-500">
+            <p class="text-lg font-semibold mb-2">画像をここにドロップするか、</p>
+            <input type="file" id="fileInput" accept="image/*" class="hidden">
+            <button id="browseButton" class="mt-3 px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">ファイルを参照</button>
+            <p class="text-sm mt-3">PNG, JPG, GIFなどの画像ファイルに対応しています。</p>
+        </div>
+
+        <!-- 色カテゴリ選択ラジオボタン -->
+        <div class="mb-8 text-center">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">変換する色のカテゴリを選択</h2>
+            <div class="flex justify-center space-x-6">
+                <label class="inline-flex items-center">
+                    <input type="radio" name="colorCategory" value="all" class="form-radio h-5 w-5 text-blue-600" checked>
+                    <span class="ml-2 text-gray-700">両方</span>
+                </label>
+                <label class="inline-flex items-center">
+                    <input type="radio" name="colorCategory" value="NicoRate" class="form-radio h-5 w-5 text-blue-600">
+                    <span class="ml-2 text-gray-700">NicoRate</span>
+                </label>
+                <label class="inline-flex items-center">
+                    <input type="radio" name="colorCategory" value="フューズビーズ" class="form-radio h-5 w-5 text-blue-600">
+                    <span class="ml-2 text-gray-700">フューズビーズ</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- キャンバス表示エリア -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+            <!-- 元画像コンテナ -->
+            <div class="flex flex-col items-center">
+                <h2 class="text-xl font-semibold text-gray-700 mb-4 text-center">元の画像</h2>
+                <div class="w-full h-64 flex items-center justify-center bg-gray-100 rounded-lg shadow-md">
+                    <canvas id="originalCanvas"></canvas>
+                </div>
+            </div>
+            <!-- 変換された画像コンテナ -->
+            <div class="flex flex-col items-center">
+                <h2 class="text-xl font-semibold text-gray-700 mb-4 text-center">変換された画像</h2>
+                <div class="w-full h-64 flex items-center justify-center bg-gray-100 rounded-lg shadow-md">
+                    <canvas id="convertedCanvas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- プログレスバー -->
+        <div id="progressBarContainer" class="w-full bg-gray-200 rounded-full h-4 mb-4 overflow-hidden hidden">
+            <div id="progressBar" class="bg-blue-500 h-4 rounded-full transition-all duration-100 ease-out" style="width: 0%;"></div>
+        </div>
+        <p id="progressText" class="text-center text-gray-700 text-sm mb-4 hidden">変換中: 0%</p>
+
+        <!-- アクションボタン -->
+        <div class="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
+            <button id="convertButton" class="px-8 py-3 bg-green-600 text-white font-bold rounded-lg shadow-lg hover:bg-green-700 transition duration-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50">色を変換</button>
+            <a id="downloadLink" class="px-8 py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-700 transition duration-300 text-center cursor-pointer flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50" download="converted_image.png">画像をダウンロード</a>
+        </div>
+    </div>
+
+    <script>
+        // DOM要素の参照を取得します
+        const dropArea = document.getElementById('drop-area');
+        const fileInput = document.getElementById('fileInput');
+        const browseButton = document.getElementById('browseButton');
+        const originalCanvas = document.getElementById('originalCanvas');
+        const convertedCanvas = document.getElementById('convertedCanvas');
+        const convertButton = document.getElementById('convertButton');
+        const downloadLink = document.getElementById('downloadLink');
+        const colorCategoryRadios = document.querySelectorAll('input[name="colorCategory"]');
+        const progressBarContainer = document.getElementById('progressBarContainer');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+
+        const originalCtx = originalCanvas.getContext('2d');
+        const convertedCtx = convertedCanvas.getContext('2d');
+
+        let currentImage = null; // 現在読み込まれている画像を保持します
+        let selectedCategory = 'all'; // 選択されているカテゴリ（初期値は「両方」）
+
+        // 事前に登録する色のデータ（RGB値とカテゴリ）
+        const allPredefinedColors = [
+            {name:"#001_ホワイト",rgb:[255,255,255], category: "NicoRate"},
+            {name:"#002_バター",rgb:[241,230,178], category: "NicoRate"},
+            {name:"#003_イエロー",rgb:[255,215,0], category: "NicoRate"},
+            {name:"#004_オレンジ",rgb:[255,130,0], category: "NicoRate"},
+            {name:"#005_レッド",rgb:[239,51,64], category: "NicoRate"},
+            {name:"#006_ピンク",rgb:[223,122,153], category: "NicoRate"},
+            {name:"#007_パープル",rgb:[78,0,142], category: "NicoRate"},
+            {name:"#008_ダークブルー",rgb:[0,35,156], category: "NicoRate"},
+            {name:"#009_ブルー",rgb:[0,156,222], category: "NicoRate"},
+            {name:"#010_グリーン",rgb:[0,150,94], category: "NicoRate"},
+            {name:"#011_ペパーミント",rgb:[113,219,212], category: "NicoRate"},
+            {name:"#012_ダークブラウン",rgb:[92,61,49], category: "NicoRate"},
+            {name:"#013_グレー",rgb:[167,168,170], category: "NicoRate"},
+            {name:"#014_ブラック",rgb:[0,0,0], category: "NicoRate"},
+            {name:"#016_ブラウン",rgb:[153,85,43], category: "NicoRate"},
+            {name:"#017_コーヒーブラウン",rgb:[152,106,76], category: "NicoRate"},
+            {name:"#018_ネールピンク",rgb:[236,195,178], category: "NicoRate"},
+            {name:"#019_ライトブラウン",rgb:[198,169,146], category: "NicoRate"},
+            {name:"#020_マゼンタ",rgb:[239,75,129], category: "NicoRate"},
+            {name:"#025_ヒヤシンス",rgb:[72,159,223], category: "NicoRate"},
+            {name:"#026_ミントグリーン",rgb:[128,224,167], category: "NicoRate"},
+            {name:"#027_ラベンダー",rgb:[191,155,222], category: "NicoRate"},
+            {name:"#028_レモンイエロー",rgb:[242,240,161], category: "NicoRate"},
+            {name:"#029_チーズ",rgb:[255,181,0], category: "NicoRate"},
+            {name:"#030_ペールパステルブルー",rgb:[185,217,235], category: "NicoRate"},
+            {name:"#031_コーラルレッド",rgb:[255,109,106], category: "NicoRate"},
+            {name:"#032_ローズパープル",rgb:[191,77,165], category: "NicoRate"},
+            {name:"#033_ライムグリーン",rgb:[122,204,0], category: "NicoRate"},
+            {name:"#034_セルリアンブルー",rgb:[0,169,224], category: "NicoRate"},
+            {name:"#035_パステルダークベージュ",rgb:[255,157,162], category: "NicoRate"},
+            {name:"#036_ラピスラズリ",rgb:[131,141,200], category: "NicoRate"},
+            {name:"#038_さくらいろ",rgb:[244,166,215], category: "NicoRate"},
+            {name:"#039_アップルグリーン",rgb:[121,190,112], category: "NicoRate"},
+            {name:"#040_ダークローズ",rgb:[215,67,136], category: "NicoRate"},
+            {name:"#041_ラズベリー",rgb:[172,20,90], category: "NicoRate"},
+            {name:"#042_コバルトブルー",rgb:[8,87,195], category: "NicoRate"},
+            {name:"#043_キャラメル",rgb:[244,175,35], category: "NicoRate"},
+            {name:"#044_パロットグリーン",rgb:[0,133,120], category: "NicoRate"},
+            {name:"#045_カラスブラック",rgb:[83,86,90], category: "NicoRate"},
+            {name:"#046_マリンブルー",rgb:[137,171,227], category: "NicoRate"},
+            {name:"#047_マルーンブラウン",rgb:[124,37,41], category: "NicoRate"},
+            {name:"#048_キウイ",rgb:[214,232,101], category: "NicoRate"},
+            {name:"#049_ベージュ",rgb:[241,202,173], category: "NicoRate"},
+            {name:"#050_ローシェンナ",rgb:[220,134,51], category: "NicoRate"},
+            {name:"#070_ダークブラック",rgb:[33,39,33], category: "NicoRate"},
+            {name:"#071_サファイアブルー",rgb:[0,87,183], category: "NicoRate"},
+            {name:"#072_べにひいろ",rgb:[255,88,93], category: "NicoRate"},
+            {name:"#073_ザクロ",rgb:[238,39,55], category: "NicoRate"},
+            {name:"#074_ハナカイドウ",rgb:[252,155,179], category: "NicoRate"},
+            {name:"#075_みずいろ",rgb:[164,219,232], category: "NicoRate"},
+            {name:"#076_アイスミントグリーン",rgb:[185,220,210], category: "NicoRate"},
+            {name:"#077_アイボリー",rgb:[248,245,227], category: "NicoRate"},
+            {name:"#078_ナイルグリーン",rgb:[91,197,0], category: "NicoRate"},
+            {name:"#079_ゴールデンイエロー",rgb:[241,196,0], category: "NicoRate"},
+            {name:"#080_ネイビーブルー",rgb:[3,37,126], category: "NicoRate"},
+            {name:"#081_ペールベージュ",rgb:[255,226,198], category: "NicoRate"},
+            {name:"#082_セレストブルー",rgb:[98,181,229], category: "NicoRate"},
+            {name:"#083_ダークグレー",rgb:[136,139,141], category: "NicoRate"},
+            {name:"#084_ダークグリーン",rgb:[0,73,30], category: "NicoRate"},
+            {name:"#085_はだいろ",rgb:[252,200,155], category: "NicoRate"},
+            {name:"#086_ペールレッド",rgb:[233,205,208], category: "NicoRate"},
+            {name:"#087_ペールグレー",rgb:[208,208,206], category: "NicoRate"},
+            {name:"#088_ペールホワイト",rgb:[221,218,232], category: "NicoRate"},
+            {name:"#089_ペールパープル",rgb:[197,180,227], category: "NicoRate"},
+            {name:"#090_クロッカス",rgb:[198,161,207], category: "NicoRate"},
+            {name:"#091_あおむらさきいろ",rgb:[33,21,81], category: "NicoRate"},
+            {name:"#092_ダークレッド",rgb:[193,0,22], category: "NicoRate"},
+            {name:"#093_カーマイン",rgb:[246,117,153], category: "NicoRate"},
+            {name:"#094_バラ",rgb:[218,24,132], category: "NicoRate"},
+            {name:"#095_ピーチ",rgb:[242,119,198], category: "NicoRate"},
+            {name:"#096_マリーゴールド",rgb:[255,143,28], category: "NicoRate"},
+            {name:"#097_ペールオレンジ",rgb:[255,174,98], category: "NicoRate"},
+            {name:"#098_ジンジャーイエロー",rgb:[222,184,59], category: "NicoRate"},
+            {name:"#099_オリーブ",rgb:[83,84,53], category: "NicoRate"},
+            {name:"#100_ティファニーブルー",rgb:[100,204,201], category: "NicoRate"},
+            {name:"#101_イエローオーカー",rgb:[180,126,0], category: "NicoRate"},
+            {name:"#102_ダークベージュ",rgb:[212,173,103], category: "NicoRate"},
+            {name:"#103_ライトベージュ",rgb:[247,206,215], category: "NicoRate"},
+            {name:"#104_ワスレナグサ",rgb:[165,176,227], category: "NicoRate"},
+            {name:"#105_しょうぶいろ",rgb:[193,167,226], category: "NicoRate"},
+            {name:"#106_しこんいろ",rgb:[205,63,173], category: "NicoRate"},
+            {name:"#107_パンジー",rgb:[128,39,108], category: "NicoRate"},
+            {name:"#108_バイオレット",rgb:[40,0,113], category: "NicoRate"},
+            {name:"#109_イエローベージュ",rgb:[253,208,134], category: "NicoRate"},
+            {name:"#110_フラミンゴ",rgb:[255,160,106], category: "NicoRate"},
+            {name:"#111_スターバックス",rgb:[29,105,96], category: "NicoRate"},
+            {name:"#112_カーネーション",rgb:[249,159,201], category: "NicoRate"},
+            {name:"#113_シアン",rgb:[0,166,200], category: "NicoRate"},
+            {name:"#114_キャメルブラウン",rgb:[191,153,114], category: "NicoRate"},
+            {name:"#115_ココナッツブラウン",rgb:[184,97,37], category: "NicoRate"},
+            {name:"#117_ピーグリーン",rgb:[167,213,0], category: "NicoRate"},
+            {name:"#118_ライトカーキ",rgb:[223,209,167], category: "NicoRate"},
+            {name:"#119_アイスグリーン",rgb:[212,235,142], category: "NicoRate"},
+            {name:"#120_ダークネイビーブルー",rgb:[34,50,110], category: "NicoRate"},
+            {name:"#121_コンクリートグレー",rgb:[187,188,188], category: "NicoRate"},
+            {name:"#122_ダークフォレストグリーン",rgb:[32,92,64], category: "NicoRate"},
+            {name:"#123_マホガニー",rgb:[170,128,102], category: "NicoRate"},
+            {name:"#124_ワインレッド",rgb:[162,0,103], category: "NicoRate"},
+            {name:"#125_パープルロータス",rgb:[152,115,172], category: "NicoRate"},
+            {name:"#126_ライトラベンダー",rgb:[200,216,235], category: "NicoRate"},
+            {name:"#127_おうどいろ",rgb:[222,188,139], category: "NicoRate"},
+            {name:"#128_ゼニスブルー",rgb:[159,174,229], category: "NicoRate"},
+            {name:"#129_チョコレートブラウン",rgb:[98,52,18], category: "NicoRate"},
+            {name:"#130_レイクブルー",rgb:[84,206,236], category: "NicoRate"},
+            {name:"#131_サクラベージュ",rgb:[245,202,191], category: "NicoRate"},
+            {name:"#132_オパールグリーン",rgb:[0,176,185], category: "NicoRate"},
+            {name:"#133_ライトグリーン",rgb:[199,233,149], category: "NicoRate"},
+            {name:"#134_メイプルレッド",rgb:[255,88,105], category: "NicoRate"},
+            {name:"#135_しゅいろ",rgb:[255,106,57], category: "NicoRate"},
+            {name:"#136_アイスミントブルー",rgb:[221,229,237], category: "NicoRate"},
+            {name:"#137_チョコブラウン",rgb:[94,75,60], category: "NicoRate"},
+            {name:"#138_コルク",rgb:[211,187,168], category: "NicoRate"},
+            {name:"#139_ピンクベージュ",rgb:[225,187,180], category: "NicoRate"},
+            {name:"#140_コーラル",rgb:[236,186,168], category: "NicoRate"},
+            {name:"#141_オリーブグリーン",rgb:[128,140,36], category: "NicoRate"},
+            {name:"#142_ベビーブルー",rgb:[177,201,232], category: "NicoRate"},
+            {name:"#143_レグホーン",rgb:[214,210,196], category: "NicoRate"},
+            {name:"#144_オイスターホワイト",rgb:[215,210,203], category: "NicoRate"},
+            {name:"#145_スカイグレー",rgb:[177,179,179], category: "NicoRate"},
+            {name:"#146_サンドホワイト",rgb:[219,200,182], category: "NicoRate"},
+            {name:"#147_スプリンググリーン",rgb:[227,233,53], category: "NicoRate"},
+            {name:"#148_チャイニーズレッド",rgb:[224,78,57], category: "NicoRate"},
+            {name:"#149_ジェイブルー",rgb:[0,75,135], category: "NicoRate"},
+            {name:"#150_ネオンイエロー",rgb:[247,234,72], category: "NicoRate"},
+            {name:"#153_ライラック",rgb:[201,177,208], category: "NicoRate"},
+            {name:"#154_サーモンピンク",rgb:[255,128,139], category: "NicoRate"},
+            {name:"#155_グレープ",rgb:[177,78,181], category: "NicoRate"},
+            {name:"#156_スカイブルー",rgb:[113,197,232], category: "NicoRate"},
+            {name:"#158_ロイヤルパープル",rgb:[135,24,157], category: "NicoRate"},
+            {name:"#159_タントンシー",rgb:[202,188,156], category: "NicoRate"},
+            {name:"#160_カフェオレブラウン",rgb:[197,139,104], category: "NicoRate"},
+            {name:"#161_ダークラベンダー",rgb:[162,120,156], category: "NicoRate"},
+            {name:"#162_ミルクティーブラウン",rgb:[165,136,119], category: "NicoRate"},
+            {name:"#163_アッシュグレー",rgb:[117,120,123], category: "NicoRate"},
+            {name:"#164_ヘーゼルブラウン",rgb:[171,152,157], category: "NicoRate"},
+            {name:"#165_シナモンブラウン",rgb:[214,128,107], category: "NicoRate"},
+            {name:"#166_エバーグリーン",rgb:[80,109,133], category: "NicoRate"},
+            {name:"#167_サンドグレー",rgb:[197,185,172], category: "NicoRate"},
+            {name:"#168_フォググレー",rgb:[190,198,196], category: "NicoRate"},
+            {name:"#169_パーチメント",rgb:[166,159,136], category: "NicoRate"},
+            {name:"#170_ライトキャラメル",rgb:[171,146,120], category: "NicoRate"},
+            {name:"#171_サンドブラウン",rgb:[193,178,162], category: "NicoRate"},
+            {name:"#172_アイビーグリーン",rgb:[146,172,160], category: "NicoRate"},
+            {name:"#173_チャコールグレー",rgb:[76,54,58], category: "NicoRate"},
+            {name:"#174_メロングリーン",rgb:[0,179,136], category: "NicoRate"},
+            {name:"#175_アイスミントライム",rgb:[181,227,216], category: "NicoRate"},
+            {name:"#191_カッパーレッド",rgb:[186,12,47], category: "NicoRate"},
+            {name:"#192_アルパイングリーン",rgb:[91,92,74], category: "NicoRate"},
+            {name:"#193_ビリジアン",rgb:[0,111,98], category: "NicoRate"},
+            {name:"#194_ピーコックグリーン",rgb:[39,153,137], category: "NicoRate"},
+            {name:"#195_レッドゴールド",rgb:[237,155,51], category: "NicoRate"},
+            {name:"#196_ミッドナイトブルー",rgb:[0,51,73], category: "NicoRate"},
+            {name:"#197_ダークスカイブルー",rgb:[0,125,186], category: "NicoRate"},
+            {name:"#198_ブルーパープル",rgb:[68,73,156], category: "NicoRate"},
+            {name:"#199_キャラメルブラウン",rgb:[164,90,42], category: "NicoRate"},
+            {name:"#200_チャコールブラック",rgb:[49,38,29], category: "NicoRate"},
+            {name:"#201_ひそくいろ",rgb:[164,188,194], category: "NicoRate"},
+            {name:"#202_ターコイズブルー",rgb:[0,133,155], category: "NicoRate"},
+            {name:"#234_ネイビー",rgb:[77,73,190], category: "NicoRate"},
+            {name:"#235_マルベリーパープル",rgb:[165,132,150], category: "NicoRate"},
+            {name:"#236_アイアングレー",rgb:[162,172,171], category: "NicoRate"},
+            {name:"#237_フクシアパープル",rgb:[207,135,157], category: "NicoRate"},
+            {name:"#238_ローズグレー",rgb:[202,167,181], category: "NicoRate"},
+            {name:"#239_ナイルブルー",rgb:[89,190,201], category: "NicoRate"},
+            {name:"#240_フォレストグリーン",rgb:[104,152,129], category: "NicoRate"},
+            {name:"#241_ベビーピンク",rgb:[222,190,210], category: "NicoRate"},
+            {name:"#242_サンフラワー",rgb:[255,200,69], category: "NicoRate"},
+            {name:"#243_ダークピンク",rgb:[205,84,91], category: "NicoRate"},
+            {name:"#244_ライトパープル",rgb:[111,121,189], category: "NicoRate"},
+            {name:"#245_シェルピンク",rgb:[232,146,124], category: "NicoRate"},
+            {name:"#246_サーモン",rgb:[219,123,81], category: "NicoRate"},
+            {name:"#247_ライトカフェオレ",rgb:[173,124,89], category: "NicoRate"},
+            {name:"#248_アンティックゴールド",rgb:[137,122,39], category: "NicoRate"},
+            // フューズビーズの色のリスト
+            {name:"A01_ホワイト",rgb:[255,255,255], category: "フューズビーズ"},
+            {name:"A02_ブラック",rgb:[0,0,0], category: "フューズビーズ"},
+            {name:"A03_タンジェリン",rgb:[246,176,76], category: "フューズビーズ"},
+            {name:"A04_オレンジ",rgb:[237,139,0], category: "フューズビーズ"},
+            {name:"A05_スイカ",rgb:[225,6,0], category: "フューズビーズ"},
+            {name:"A06_レッド",rgb:[186,12,47], category: "フューズビーズ"},
+            {name:"A07_ピンク",rgb:[241,167,220], category: "フューズビーズ"},
+            {name:"A08_ピーチ",rgb:[255,52,179], category: "フューズビーズ"},
+            {name:"A09_ローズ",rgb:[219,33,82], category: "フューズビーズ"},
+            {name:"A10_ライトイエロー",rgb:[242,240,161], category: "フューズビーズ"},
+            {name:"A11_ヨークイエロー",rgb:[255,209,0], category: "フューズビーズ"},
+            {name:"A12_ライトグリーン",rgb:[173,220,145], category: "フューズビーズ"},
+            {name:"A13_レモングリーン",rgb:[135,216,57], category: "フューズビーズ"},
+            {name:"A14_アップルグリーン",rgb:[36,158,107], category: "フューズビーズ"},
+            {name:"A15_ダークグリーン",rgb:[0,124,88], category: "フューズビーズ"},
+            {name:"A16_コーラル",rgb:[255,106,19], category: "フューズビーズ"},
+            {name:"A17_ダークコーラル",rgb:[255,103,31], category: "フューズビーズ"},
+            {name:"A18_ライトブルー",rgb:[170,220,235], category: "フューズビーズ"},
+            {name:"A19_アズールブルー",rgb:[65,182,230], category: "フューズビーズ"},
+            {name:"A20_レイクブルー",rgb:[0,144,218], category: "フューズビーズ"},
+            {name:"A21_ダークブルー",rgb:[0,51,153], category: "フューズビーズ"},
+            {name:"A22_フレッシュ",rgb:[252,191,169], category: "フューズビーズ"},
+            {name:"A23_ベージュ",rgb:[204,153,102], category: "フューズビーズ"},
+            {name:"A24_バターイエロー",rgb:[255,231,128], category: "フューズビーズ"},
+            {name:"A25_ラベンダー",rgb:[167,123,202], category: "フューズビーズ"},
+            {name:"A26_ライトパープル",rgb:[160,94,181], category: "フューズビーズ"},
+            {name:"A27_ダークパープル",rgb:[51,0,114], category: "フューズビーズ"},
+            {name:"A28_ソイルブラウン",rgb:[180,126,0], category: "フューズビーズ"},
+            {name:"A29_ライトブラウン",rgb:[164,73,61], category: "フューズビーズ"},
+            {name:"A30_バーミリオン",rgb:[122,62,44], category: "フューズビーズ"},
+            {name:"A31_ミルクチョコブラウン",rgb:[123,77,53], category: "フューズビーズ"},
+            {name:"A32_コーヒーブラウン",rgb:[92,71,56], category: "フューズビーズ"},
+            {name:"A33_ライトグレー",rgb:[155,155,155], category: "フューズビーズ"},
+            {name:"A34_ダークグレー",rgb:[118,119,119], category: "フューズビーズ"},
+            {name:"A35_シルバー",rgb:[160,159,157], category: "フューズビーズ"},
+            {name:"A36_ダークピンク",rgb:[201,128,158], category: "フューズビーズ"},
+            {name:"A37_ブルー",rgb:[20,123,209], category: "フューズビーズ"},
+            {name:"A38_トルコブルー",rgb:[105,179,231], category: "フューズビーズ"},
+            {name:"A39_ラムネ",rgb:[153,214,234], category: "フューズビーズ"},
+            {name:"A40_マスカット",rgb:[206,220,0], category: "フューズビーズ"},
+            {name:"A41_パステルイエロー",rgb:[246,235,97], category: "フューズビーズ"},
+            {name:"A42_イエロー",rgb:[250,224,83], category: "フューズビーズ"},
+            {name:"A43_クリムゾンレッド",rgb:[165,0,52], category: "フューズビーズ"},
+            {name:"A44_ライトコーラル",rgb:[255,163,139], category: "フューズビーズ"},
+            {name:"A45_メロングリーン",rgb:[93,219,93], category: "フューズビーズ"},
+            {name:"A46_レモン",rgb:[243,234,93], category: "フューズビーズ"},
+            {name:"A47_ライトベージュ",rgb:[243,207,179], category: "フューズビーズ"},
+            {name:"A48_ゴールデンイエロー",rgb:[255,199,44], category: "フューズビーズ"},
+            {name:"A49_ディープピンク",rgb:[236,134,208], category: "フューズビーズ"},
+            {name:"A50_ライトラベンダー",rgb:[197,180,227], category: "フューズビーズ"},
+            {name:"A51_アイボリー",rgb:[252,251,205], category: "フューズビーズ"},
+            {name:"A52_パープル",rgb:[74,31,135], category: "フューズビーズ"},
+            {name:"A53_ライム",rgb:[115,211,60], category: "フューズビーズ"},
+            {name:"A54_ピーコックブルー",rgb:[0,178,169], category: "フューズビーズ"},
+            {name:"A55_ジェイドグリーン",rgb:[108,194,74], category: "フューズビーズ"},
+            {name:"A56_グレー",rgb:[136,139,141], category: "フューズビーズ"},
+            {name:"A57_ブラッドレッド",rgb:[188,4,35], category: "フューズビーズ"},
+            {name:"A58_ミッドナイトブルー",rgb:[5,8,73], category: "フューズビーズ"},
+            {name:"A59_ダークレッド",rgb:[83,26,35], category: "フューズビーズ"},
+            {name:"A60_パステルアクア",rgb:[158,229,176], category: "フューズビーズ"},
+            {name:"A61_ハネデュー",rgb:[241,235,156], category: "フューズビーズ"},
+            {name:"A62_パステルレッド",rgb:[252,63,63], category: "フューズビーズ"},
+            {name:"A63_パステルパルム",rgb:[234,190,219], category: "フューズビーズ"},
+            {name:"A64_パステルベリー",rgb:[165,0,80], category: "フューズビーズ"},
+            {name:"A65_パステルオレンジ",rgb:[239,129,46], category: "フューズビーズ"},
+            {name:"A66_パステルピンク",rgb:[252,108,133], category: "フューズビーズ"},
+            {name:"A67_パステルパープル",rgb:[177,78,181], category: "フューズビーズ"},
+            {name:"A68_パステルブルー",rgb:[105,194,238], category: "フューズビーズ"},
+            {name:"A69_マットブラック",rgb:[35,40,43], category: "フューズビーズ"},
+            {name:"A70_ダークフォレストグリーン",rgb:[24,48,40], category: "フューズビーズ"},
+            {name:"A71_ブライトイエロー",rgb:[234,170,0], category: "フューズビーズ"},
+            {name:"A72_クリームチェダーイエロー",rgb:[255,197,110], category: "フューズビーズ"},
+            {name:"A73_キャラメルブラウン",rgb:[184,97,37], category: "フューズビーズ"},
+            {name:"A74_ミルクティーブラウン",rgb:[205,178,119], category: "フューズビーズ"},
+            {name:"A75_シナモンブラウン",rgb:[181,129,80], category: "フューズビーズ"},
+            {name:"A76_サーモンピンク",rgb:[255,109,106], category: "フューズビーズ"},
+            {name:"A77_コンビーフピンク",rgb:[170,87,97], category: "フューズビーズ"},
+            {name:"A78_サラミレッド",rgb:[92,19,27], category: "フューズビーズ"},
+            {name:"A79_アイスブルー",rgb:[89,213,216], category: "フューズビーズ"},
+            {name:"A80_アルノブルー",rgb:[0,174,199], category: "フューズビーズ"},
+            {name:"A81_ターコイズ",rgb:[72,169,197], category: "フューズビーズ"},
+            {name:"A82_セルリアンブルー",rgb:[0,174,214], category: "フューズビーズ"},
+            {name:"A83_コバルトブルー",rgb:[0,133,173], category: "フューズビーズ"},
+            {name:"A84_オリーブグリーン",rgb:[155,188,17], category: "フューズビーズ"},
+            {name:"A85_ダークオリーブグリーン",rgb:[153,155,48], category: "フューズビーズ"},
+            {name:"A86_ピーマングリーン",rgb:[0,133,34], category: "フューズビーズ"},
+            {name:"A87_ゴーストホワイト",rgb:[239,239,239], category: "フューズビーズ"},
+            {name:"A88_アッシュホワイト",rgb:[209,209,209], category: "フューズビーズ"},
+            {name:"A89_コンクリートグレー",rgb:[187,188,188], category: "フューズビーズ"},
+            {name:"A90_カーボングレー",rgb:[72,73,85], category: "フューズビーズ"},
+            {name:"A91_クレセントイエロー",rgb:[222,185,71], category: "フューズビーズ"},
+            {name:"A92_ペールベージュ",rgb:[218,182,152], category: "フューズビーズ"},
+            {name:"A93_ソーセージピンク",rgb:[244,169,153], category: "フューズビーズ"},
+            {name:"A94_ローズオレンジ",rgb:[238,125,103], category: "フューズビーズ"},
+            {name:"A95_アプリコットオレンジ",rgb:[240,134,97], category: "フューズビーズ"},
+            {name:"A96_キャロットオレンジ",rgb:[212,114,42], category: "フューズビーズ"},
+            {name:"A97_ヒマラヤブルー",rgb:[100,172,223], category: "フューズビーズ"},
+            {name:"A98_アカプルコブルー",rgb:[100,194,220], category: "フューズビーズ"},
+            {name:"A99_ボニーブルー",rgb:[79,159,179], category: "フューズビーズ"},
+            {name:"A100_エレクトリックブルー",rgb:[49,150,221], category: "フューズビーズ"},
+            {name:"A101_アメリカンブルー",rgb:[27,108,182], category: "フューズビーズ"},
+            {name:"A102_エンパイアブルー",rgb:[8,57,128], category: "フューズビーズ"},
+            {name:"A103_アドニスブルー",rgb:[10,102,139], category: "フューズビーズ"},
+            {name:"A104_ダークターコイズ",rgb:[8,91,110], category: "フューズビーズ"},
+            {name:"A105_ガーターブルー",rgb:[0,78,120], category: "フューズビーズ"},
+            {name:"A106_ダックブルー",rgb:[0,85,116], category: "フューズビーズ"},
+            {name:"A107_ミルキーカーキ",rgb:[204,190,128], category: "フューズビーズ"},
+            {name:"A108_パステルカーキ",rgb:[164,147,80], category: "フューズビーズ"},
+            {name:"A109_ライトカーキ",rgb:[158,136,60], category: "フューズビーズ"},
+            {name:"A110_カーキ",rgb:[118,108,43], category: "フューズビーズ"},
+            {name:"A111_ダークカーキ",rgb:[121,95,38], category: "フューズビーズ"},
+            {name:"A112_ミルキーモスグリーン",rgb:[186,184,162], category: "フューズビーズ"},
+            {name:"A113_パステルモスグリーン",rgb:[114,140,84], category: "フューズビーズ"},
+            {name:"A114_ライトモスグリーン",rgb:[126,124,68], category: "フューズビーズ"},
+            {name:"A115_モスグリーン",rgb:[100,105,46], category: "フューズビーズ"},
+            {name:"A116_ダークモスグリーン",rgb:[78,88,44], category: "フューズビーズ"},
+            {name:"A117_アイビーグリーン",rgb:[74,94,45], category: "フューズビーズ"},
+            {name:"A118_フロスティブルー",rgb:[113,196,82], category: "フューズビーズ"},
+            {name:"A119_ポーラーミント",rgb:[102,204,153], category: "フューズビーズ"},
+            {name:"A120_セラドン",rgb:[86,154,131], category: "フューズビーズ"},
+            {name:"A121_ドーミーグリーン",rgb:[20,194,91], category: "フューズビーズ"},
+            {name:"A122_パロットグリーン",rgb:[24,168,24], category: "フューズビーズ"},
+            {name:"A123_ケールグリーン",rgb:[4,85,46], category: "フューズビーズ"},
+            {name:"A124_ライトビリジアン",rgb:[19,107,90], category: "フューズビーズ"},
+            {name:"A125_ビリジアン",rgb:[5,70,65], category: "フューズビーズ"},
+            {name:"A126_ミルキーローズ",rgb:[217,182,214], category: "フューズビーズ"},
+            {name:"A127_ミルキーグレープ",rgb:[173,98,164], category: "フューズビーズ"},
+            {name:"A128_ミルキーピーチ",rgb:[230,140,163], category: "フューズビーズ"},
+            {name:"A129_フラゴナールピンク",rgb:[222,84,121], category: "フューズビーズ"},
+            {name:"A130_ミルキーラベンダー",rgb:[158,130,186], category: "フューズビーズ"},
+            {name:"A131_フラミンゴピンク",rgb:[232,65,107], category: "フューズビーズ"},
+            {name:"A132_ピンクパープル",rgb:[183,56,143], category: "フューズビーズ"},
+            {name:"A133_アメジストパープル",rgb:[88,31,126], category: "フューズビーズ"},
+            {name:"A134_ペールアイリス",rgb:[140,163,212], category: "フューズビーズ"},
+            {name:"A135_ミルキーウィステリア",rgb:[154,154,204], category: "フューズビーズ"},
+            {name:"A136_ミルキーウルトラマリン",rgb:[89,129,193], category: "フューズビーズ"},
+            {name:"A137_ライトウルトラマリン",rgb:[65,102,176], category: "フューズビーズ"},
+            {name:"A138_アガパンサスブルー",rgb:[71,95,171], category: "フューズビーズ"},
+            {name:"A139_ライトサルビアブルー",rgb:[55,69,147], category: "フューズビーズ"},
+            {name:"A140_ウルトラマリン",rgb:[61,86,165], category: "フューズビーズ"},
+            {name:"A141_ディープウルトラマリン",rgb:[41,66,153], category: "フューズビーズ"},
+            {name:"A142_サルビアブルー",rgb:[37,38,138], category: "フューズビーズ"},
+            {name:"A143_ネイビー",rgb:[26,47,111], category: "フューズビーズ"},
+            {name:"A144_ミルキーマスカット",rgb:[211,201,93], category: "フューズビーズ"},
+            {name:"A145_ワインレッド",rgb:[81,9,24], category: "フューズビーズ"},
+            {name:"A146_ライトセラドン",rgb:[100,179,158], category: "フューズビーズ"},
+            {name:"A147_チョコブラウン",rgb:[99,67,56], category: "フューズビーズ"},
+            {name:"A148_ライトバターイエロー",rgb:[237,211,158], category: "フューズビーズ"},
+            {name:"A149_ウィステリア",rgb:[105,99,171], category: "フューズビーズ"},
+            {name:"A150_ダークアイビーグリーン",rgb:[43,63,31], category: "フューズビーズ"},
+            {name:"A151_ライトウィステリア",rgb:[151,145,197], category: "フューズビーズ"},
+            {name:"A152_ホワイトウィステリア",rgb:[184,189,224], category: "フューズビーズ"},
+            {name:"A153_ミルキーベージュ",rgb:[249,200,152], category: "フューズビーズ"},
+            {name:"A154_カフェオレブラウン",rgb:[195,144,105], category: "フューズビーズ"},
+            {name:"A155_アイアングレー",rgb:[68,80,91], category: "フューズビーズ"},
+            {name:"A156_ミリタリーグレー",rgb:[62,73,85], category: "フューズビーズ"},
+            {name:"A157_チャコールブラック",rgb:[32,40,48], category: "フューズビーズ"}
+        ];
+
+        /**
+         * 2つのRGB色の間のユークリッド距離を計算します。
+         * 色の類似性を判断するために使用されます。
+         * @param {object} c1 - 最初の色 {r, g, b}
+         * @param {object} c2 - 2番目の色 {r, g, b}
+         * @returns {number} - 2つの色の間の距離
+         */
+        function colorDistance(c1, c2) {
+            return Math.sqrt(
+                Math.pow(c1.r - c2.r, 2) +
+                Math.pow(c1.g - c2.g, 2) +
+                Math.pow(c1.b - c2.b, 2)
+            );
+        }
+
+        /**
+         * カスタムメッセージボックスを表示します。
+         * @param {string} title - メッセージボックスのタイトル
+         * @param {string} message - メッセージの内容
+         */
+        function showMessageBox(title, message) {
+            const messageBox = document.createElement('div');
+            messageBox.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50';
+            messageBox.innerHTML = `
+                <div class="bg-white p-6 rounded-lg shadow-xl text-center">
+                    <p class="text-lg font-semibold text-gray-800 mb-4">${title}</p>
+                    <p class="text-gray-600 mb-6">${message}</p>
+                    <button class="px-5 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700" onclick="this.parentNode.parentNode.remove()">閉じる</button>
+                </div>
+            `;
+            document.body.appendChild(messageBox);
+        }
+
+        /**
+         * 画像ファイルを読み込み、元のキャンバスに描画します。
+         * @param {File} file - 読み込む画像ファイル
+         */
+        function loadImage(file) {
+            if (!file || !file.type.startsWith('image/')) {
+                console.error("無効なファイルタイプです。画像ファイルを選択してください。");
+                showMessageBox("無効なファイルタイプです。", "画像ファイルを選択してください。");
+                return;
+            }
+
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    currentImage = img; // 現在の画像を保存
+
+                    // キャンバスの内部解像度を画像に合わせる
+                    originalCanvas.width = img.width;
+                    originalCanvas.height = img.height;
+                    convertedCanvas.width = img.width;
+                    convertedCanvas.height = img.height;
+
+                    // ピクセルアートのぼやけを防ぐために、画像スムージングを無効化
+                    originalCtx.imageSmoothingEnabled = false;
+                    convertedCtx.imageSmoothingEnabled = false;
+                    // ベンダープレフィックス付きのプロパティも設定 (互換性のため)
+                    originalCtx.mozImageSmoothingEnabled = false;
+                    originalCtx.webkitImageSmoothingEnabled = false;
+                    originalCtx.msImageSmoothingEnabled = false;
+                    convertedCtx.mozImageSmoothingEnabled = false;
+                    convertedCtx.webkitImageSmoothingEnabled = false;
+                    convertedCtx.msImageSmoothingEnabled = false;
+
+
+                    // 表示用のキャンバスのサイズを、コンテナの最大サイズに収まるように計算
+                    const originalCanvasContainer = originalCanvas.parentElement;
+                    const containerMaxWidth = originalCanvasContainer.offsetWidth;
+                    const containerMaxHeight = originalCanvasContainer.offsetHeight;
+
+                    const aspectRatio = img.width / img.height;
+
+                    let displayWidth;
+                    let displayHeight;
+
+                    // アスペクト比を維持しつつ、コンテナに収まる最大サイズを計算
+                    if (containerMaxWidth / containerMaxHeight > aspectRatio) {
+                        // コンテナの方が画像より横長な場合、高さに合わせてスケール
+                        displayHeight = containerMaxHeight;
+                        displayWidth = containerMaxHeight * aspectRatio;
+                    } else {
+                        // コンテナの方が画像より縦長、またはアスペクト比が同じ場合、幅に合わせてスケール
+                        displayWidth = containerMaxWidth;
+                        displayHeight = containerMaxWidth / aspectRatio;
+                    }
+
+                    // 計算された表示サイズをキャンバス要素のスタイルに適用
+                    originalCanvas.style.width = `${displayWidth}px`;
+                    originalCanvas.style.height = `${displayHeight}px`;
+                    convertedCanvas.style.width = `${displayWidth}px`;
+                    convertedCanvas.style.height = `${displayHeight}px`;
+
+
+                    // 元のキャンバスに画像を描画
+                    originalCtx.clearRect(0, 0, originalCanvas.width, originalCanvas.height);
+                    originalCtx.drawImage(img, 0, 0);
+
+                    // 変換されたキャンバスをクリア
+                    convertedCtx.clearRect(0, 0, convertedCanvas.width, convertedCanvas.height);
+
+                    // ダウンロードリンクを無効化（変換前のため）
+                    downloadLink.classList.add('opacity-50', 'pointer-events-none');
+                    downloadLink.removeAttribute('href');
+                };
+                img.onerror = () => {
+                    console.error("画像の読み込みに失敗しました。");
+                    showMessageBox("画像の読み込みに失敗しました。", "ファイルが破損しているか、サポートされていない形式です。");
+                };
+                img.src = e.target.result;
+            };
+
+            reader.onerror = () => {
+                console.error("ファイルの読み込み中にエラーが発生しました。");
+                showMessageBox("ファイルの読み込み中にエラーが発生しました。", "もう一度お試しください。");
+            };
+
+            reader.readAsDataURL(file);
+        }
+
+        /**
+         * 画像の色を事前に登録された色に変換し、変換されたキャンバスに描画します。
+         */
+        async function convertImageColors() {
+            if (!currentImage) {
+                showMessageBox("変換する画像が読み込まれていません。", "まず画像をアップロードしてください。");
+                return;
+            }
+
+            // 選択されたカテゴリに基づいて色をフィルタリング
+            const filteredColors = allPredefinedColors.filter(color => {
+                return selectedCategory === 'all' || color.category === selectedCategory;
+            }).map(color => ({ r: color.rgb[0], g: color.rgb[1], b: color.rgb[2] }));
+
+            if (filteredColors.length === 0) {
+                 showMessageBox("選択されたカテゴリに利用可能な色がありません。", "別のカテゴリを選択してください。");
+                return;
+            }
+
+            // プログレスバーを表示し、初期化
+            progressBarContainer.classList.remove('hidden');
+            progressText.classList.remove('hidden');
+            progressBar.style.width = '0%';
+            progressText.textContent = '変換中: 0%';
+
+            // 元のキャンバスからピクセルデータを取得
+            const imageData = originalCtx.getImageData(0, 0, originalCanvas.width, originalCanvas.height);
+            const data = imageData.data; // RGBA形式のピクセルデータ配列
+            const totalPixels = data.length / 4; // 全ピクセル数
+            const chunkSize = 10000; // 一度に処理するピクセル数
+            let processedPixels = 0;
+
+            // 各ピクセルを反復処理し、最も近い色に変換
+            for (let i = 0; i < data.length; i += 4) {
+                const pixelColor = {
+                    r: data[i],     // 赤
+                    g: data[i + 1], // 緑
+                    b: data[i + 2]  // 青
+                };
+
+                let minDistance = Infinity;
+                let closestColor = null;
+
+                // フィルタリングされた各色との距離を計算し、最も近い色を見つける
+                for (const predefinedColor of filteredColors) {
+                    const dist = colorDistance(pixelColor, predefinedColor);
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        closestColor = predefinedColor;
+                    }
+                }
+
+                // ピクセルの色を最も近い色に更新
+                if (closestColor) {
+                    data[i] = closestColor.r;
+                    data[i + 1] = closestColor.g;
+                    data[i + 2] = closestColor.b;
+                    // data[i + 3] (アルファ値) は変更しない
+                }
+
+                processedPixels++;
+
+                // 進捗を更新（定期的に、または最後に）
+                if (processedPixels % chunkSize === 0 || processedPixels === totalPixels) {
+                    const progress = Math.min(100, Math.floor((processedPixels / totalPixels) * 100));
+                    progressBar.style.width = `${progress}%`;
+                    progressText.textContent = `変換中: ${progress}%`;
+                    // UI更新のためにイベントループに制御を戻す
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+            }
+
+            // 変換されたピクセルデータを変換されたキャンバスに描画
+            convertedCtx.putImageData(imageData, 0, 0);
+
+            // プログレスバーを非表示にする
+            progressBarContainer.classList.add('hidden');
+            progressText.classList.add('hidden');
+
+            // ダウンロードリンクを有効化
+            downloadLink.href = convertedCanvas.toDataURL('image/png');
+            downloadLink.classList.remove('opacity-50', 'pointer-events-none');
+        }
+
+        // --- イベントリスナーの設定 ---
+
+        // ドラッグ＆ドロップ関連のイベント
+        dropArea.addEventListener('dragover', (e) => {
+            e.preventDefault(); // デフォルトの動作（リンクを開くなど）を防止
+            dropArea.classList.add('highlight'); // ハイライト表示
+        });
+
+        dropArea.addEventListener('dragleave', () => {
+            dropArea.classList.remove('highlight'); // ハイライトを解除
+        });
+
+        dropArea.addEventListener('drop', (e) => {
+            e.preventDefault(); // デフォルトの動作を防止
+            dropArea.classList.remove('highlight'); // ハイライトを解除
+
+            const files = e.dataTransfer.files; // ドロップされたファイルを取得
+            if (files.length > 0) {
+                loadImage(files[0]); // 最初のファイルを読み込む
+            }
+        });
+
+        // 「ファイルを参照」ボタンのクリックイベント
+        browseButton.addEventListener('click', () => {
+            fileInput.click(); // 隠されたファイル入力フィールドをクリック
+        });
+
+        // ファイル入力フィールドの変更イベント（ファイルが選択された時）
+        fileInput.addEventListener('change', (e) => {
+            const files = e.target.files;
+            if (files.length > 0) {
+                loadImage(files[0]); // 選択されたファイルを読み込む
+            }
+        });
+
+        // ラジオボタンの変更イベント
+        colorCategoryRadios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                selectedCategory = e.target.value; // 選択されたカテゴリを更新
+            });
+        });
+
+        // 「色を変換」ボタンのクリックイベント
+        convertButton.addEventListener('click', convertImageColors);
+
+        // ウィンドウのロードが完了したら、初期状態を設定
+        window.onload = () => {
+             // ダウンロードリンクを初期状態で無効化
+            downloadLink.classList.add('opacity-50', 'pointer-events-none');
+            downloadLink.removeAttribute('href');
+        };
+    </script>
+</body>
+</html>
