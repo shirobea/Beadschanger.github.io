@@ -3,727 +3,639 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画像の色変換</title>
-    <!-- Tailwind CSSを読み込み、モダンなデザインを実現します -->
+    <title>アイロンビーズカラー変換ソフト v1.3.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        /* フォントをInterに設定し、全体的にクリーンな印象を与えます */
+        html {
+            scroll-behavior: smooth;
+        }
         body {
-            font-family: 'Inter', sans-serif;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
+            font-family: 'M PLUS Rounded 1c', sans-serif;
+            background-color: #f8fafc;
         }
-        /* キャンバス要素に基本スタイルを適用します */
-        /* width/heightはJavaScriptで設定し、最大サイズでアスペクト比を維持するようにします */
         canvas {
-            display: block; /* 余分なマージンを削除 */
-            border-radius: 0.5rem; /* 角を丸くする */
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* 軽い影を追加 */
-            background-color: #f1f5f9; /* キャンバスの背景色 */
-            max-width: 100%; /* 親要素の幅に合わせて最大幅を設定 */
-            max-height: 100%; /* 親要素の高さに合わせて最大高さを設定 */
-            object-fit: contain; /* コンテナ内でアスペクト比を維持して収まるようにする */
-            /* 重要: canvas要素のスタイルはJavaScriptで動的に設定されるため、
-                     CSSでの固定幅/高さの指定はここではしません。 */
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -webkit-crisp-edges;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            /* [FIX] Set background to white by default */
+            background-color: white;
         }
-        /* ドラッグ＆ドロップエリアのスタイル */
-        #drop-area {
-            border: 2px dashed #cbd5e0; /* 破線ボーダー */
-            border-radius: 0.75rem; /* 角を丸くする */
-            background-color: #f8fafc; /* 薄い背景色 */
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-            cursor: pointer;
-            transition: all 0.2s ease-in-out; /* ホバー時のアニメーション */
+        .preview-aspect-ratio {
+            width: 100%;
+            height: auto;
+            max-height: 400px;
+            object-fit: contain;
         }
-        /* ドラッグオーバー時のハイライトスタイル */
-        #drop-area.highlight {
-            background-color: #e0f2fe; /* 明るい青 */
-            border-color: #38b2ac; /* シアン */
-        }
-        /* ボタンにホバー効果とアクティブ効果を追加 */
-        button:active {
-            transform: translateY(1px);
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        .drag-over { border-color: #3b82f6; background-color: #eff6ff; }
+        .disabled-panel { opacity: 0.5; pointer-events: none; }
+        
+        @media (max-width: 640px) {
+            .mobile-hidden {
+                display: none;
+            }
         }
     </style>
 </head>
-<body class="bg-gradient-to-br from-blue-100 to-indigo-200 min-h-screen flex items-center justify-center py-10 px-4">
-    <div class="bg-white p-8 rounded-2xl shadow-xl max-w-4xl w-full">
-        <h1 class="text-3xl font-bold text-center text-gray-800 mb-8">画像の色変換ツール</h1>
+<body class="text-slate-800">
 
-        <!-- 画像アップロードエリア -->
-        <div id="drop-area" class="w-full h-48 mb-8 p-4 text-center text-gray-500">
-            <p class="text-lg font-semibold mb-2">画像をここにドロップするか、</p>
-            <input type="file" id="fileInput" accept="image/*" class="hidden">
-            <button id="browseButton" class="mt-3 px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">ファイルを参照</button>
-            <p class="text-sm mt-3">PNG, JPG, GIFなどの画像ファイルに対応しています。</p>
-        </div>
+    <!-- [FIX] Header is no longer sticky -->
+    <header class="bg-white shadow-md p-4 flex justify-between items-center">
+        <h1 class="text-lg md:text-xl font-bold text-slate-700">アイロンビーズカラー変換ソフト</h1>
+        <span id="app-version" class="text-sm text-slate-500 bg-slate-100 px-2 py-1 rounded-full">v1.3.2</span>
+    </header>
 
-        <!-- 色カテゴリ選択ラジオボタン -->
-        <div class="mb-8 text-center">
-            <h2 class="text-xl font-semibold text-gray-700 mb-4">変換する色のカテゴリを選択</h2>
-            <div class="flex justify-center space-x-6">
-                <label class="inline-flex items-center">
-                    <input type="radio" name="colorCategory" value="all" class="form-radio h-5 w-5 text-blue-600" checked>
-                    <span class="ml-2 text-gray-700">両方</span>
-                </label>
-                <label class="inline-flex items-center">
-                    <input type="radio" name="colorCategory" value="NicoRate" class="form-radio h-5 w-5 text-blue-600">
-                    <span class="ml-2 text-gray-700">NicoRate</span>
-                </label>
-                <label class="inline-flex items-center">
-                    <input type="radio" name="colorCategory" value="フューズビーズ" class="form-radio h-5 w-5 text-blue-600">
-                    <span class="ml-2 text-gray-700">フューズビーズ</span>
+    <main class="container mx-auto p-4 md:p-6 lg:p-8 space-y-8">
+
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
+                <h2 class="text-lg font-bold border-b pb-2">1. 画像の準備</h2>
+                <label id="upload-area" for="file-input" class="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center cursor-pointer block transition-colors hover:bg-slate-50">
+                    <p class="text-slate-500">ここに画像をドラッグ＆ドロップ</p>
+                    <p class="text-sm text-slate-400 my-2">または</p>
+                    <span class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors inline-block">ファイルを選択</span>
+                    <input type="file" id="file-input" class="hidden" accept="image/png, image/jpeg">
                 </label>
             </div>
-        </div>
 
-        <!-- キャンバス表示エリア -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-            <!-- 元画像コンテナ -->
-            <div class="flex flex-col items-center">
-                <h2 class="text-xl font-semibold text-gray-700 mb-4 text-center">元の画像</h2>
-                <div class="w-full h-64 flex items-center justify-center bg-gray-100 rounded-lg shadow-md">
-                    <canvas id="originalCanvas"></canvas>
+            <div id="settings-panel" class="bg-white p-6 rounded-lg shadow-md space-y-4 transition-opacity duration-300 disabled-panel">
+                <h2 class="text-lg font-bold border-b pb-2">2. 変換設定</h2>
+                
+                <div>
+                    <label class="font-bold">使用パレット</label>
+                    <div class="flex flex-wrap gap-x-3 gap-y-2 mt-2" id="palette-filter">
+                        <label class="flex items-center"><input type="radio" name="palette" value="all" class="mr-1" checked>両方</label>
+                    </div>
                 </div>
-            </div>
-            <!-- 変換された画像コンテナ -->
-            <div class="flex flex-col items-center">
-                <h2 class="text-xl font-semibold text-gray-700 mb-4 text-center">変換された画像</h2>
-                <div class="w-full h-64 flex items-center justify-center bg-gray-100 rounded-lg shadow-md">
-                    <canvas id="convertedCanvas"></canvas>
+
+                <div>
+                    <label class="font-bold">変換モード</label>
+                    <div class="flex space-x-4 mt-2" id="conversion-mode">
+                        <label class="flex items-center"><input type="radio" name="mode" value="normal" class="mr-1" checked>通常</label>
+                        <label class="flex items-center"><input type="radio" name="mode" value="dithering" class="mr-1">多色 (ディザリング)</label>
+                    </div>
+                    <div id="dithering-strength-container" class="hidden mt-2">
+                        <label for="dithering-strength" class="font-medium text-sm">ディザリング強度</label>
+                        <input type="range" id="dithering-strength" min="0.1" max="1" step="0.1" value="0.7" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                        <div class="text-xs text-slate-500 flex justify-between"><span>弱い</span><span>強い</span></div>
+                    </div>
                 </div>
+
+                <div>
+                    <label class="font-bold">変換後サイズ (px)</label>
+                    <div class="flex items-center space-x-2 mt-2">
+                        <input type="number" id="width-input" class="w-full border-slate-300 rounded-md shadow-sm" placeholder="幅">
+                        <span class="text-slate-500">×</span>
+                        <input type="number" id="height-input" class="w-full border-slate-300 rounded-md shadow-sm" placeholder="高さ">
+                        <button id="reset-size-btn" class="bg-slate-200 hover:bg-slate-300 text-slate-600 font-bold p-2 rounded-md transition-colors text-xl w-10 h-10 flex items-center justify-center flex-shrink-0">&#8635;</button>
+                    </div>
+                </div>
+
+                <h2 class="text-lg font-bold border-b pb-2 mt-6">3. 変換の実行</h2>
+                
+                <button id="convert-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 shadow">
+                    変換実行
+                </button>
+                <div class="w-full bg-slate-200 rounded-full h-2.5 mt-2">
+                    <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+                <p id="progress-text" class="text-center text-sm text-slate-500 h-4"></p>
             </div>
-        </div>
+        </section>
 
-        <!-- プログレスバー -->
-        <div id="progressBarContainer" class="w-full bg-gray-200 rounded-full h-4 mb-4 overflow-hidden hidden">
-            <div id="progressBar" class="bg-blue-500 h-4 rounded-full transition-all duration-100 ease-out" style="width: 0%;"></div>
-        </div>
-        <p id="progressText" class="text-center text-gray-700 text-sm mb-4 hidden">変換中: 0%</p>
+        <section id="result-section" class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="bg-white p-4 rounded-lg shadow-md flex flex-col items-center justify-center">
+                <h3 class="font-bold text-center mb-2">元の画像</h3>
+                <canvas id="original-canvas" class="preview-aspect-ratio rounded-md cursor-pointer border"></canvas>
+            </div>
+            <!-- [MODIFIED] Added ID for scrolling -->
+            <div id="result-container" class="bg-white p-4 rounded-lg shadow-md flex flex-col items-center justify-center space-y-4">
+                <h3 class="font-bold text-center">変換後画像</h3>
+                <canvas id="result-canvas" class="preview-aspect-ratio rounded-md cursor-pointer border"></canvas>
+                <button id="download-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 disabled:bg-slate-300 disabled:cursor-not-allowed shadow" disabled>
+                    変換後の画像をダウンロード
+                </button>
+            </div>
+        </section>
 
-        <!-- アクションボタン -->
-        <div class="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
-            <button id="convertButton" class="px-8 py-3 bg-green-600 text-white font-bold rounded-lg shadow-lg hover:bg-green-700 transition duration-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50">色を変換</button>
-            <a id="downloadLink" class="px-8 py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-700 transition duration-300 text-center cursor-pointer flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50" download="converted_image.png">画像をダウンロード</a>
+        <section id="used-colors-section" class="hidden bg-white p-6 rounded-lg shadow-md w-full mx-auto">
+            <h2 class="text-xl font-bold text-center mb-4">使用色リスト</h2>
+            <div id="color-list-container" class="max-h-96 overflow-y-auto custom-scrollbar">
+                <table class="w-full text-sm text-left table-fixed">
+                    <thead class="text-xs text-slate-700 uppercase bg-slate-50 sticky top-0">
+                        <tr>
+                            <th scope="col" class="px-2 py-3 w-16">色</th>
+                            <th scope="col" class="px-2 py-3 w-24">番号</th>
+                            <th scope="col" class="px-2 py-3 mobile-hidden">色名</th>
+                            <th scope="col" class="px-2 py-3 w-24 text-right">使用個数</th>
+                        </tr>
+                    </thead>
+                    <tbody id="color-list-body"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- [FIX] Modified modal structure for zoom-proof close button -->
+    <div id="modal" class="hidden fixed inset-0 bg-black bg-opacity-75 z-40 flex items-center justify-center p-4">
+        <div class="relative max-w-full max-h-full flex items-center justify-center">
+            <canvas id="modal-canvas"></canvas>
         </div>
+        <button id="close-modal-btn" class="fixed top-4 right-4 text-white bg-slate-800 rounded-full w-10 h-10 flex items-center justify-center text-2xl font-bold leading-none z-50">&times;</button>
     </div>
 
-    <script>
-        // DOM要素の参照を取得します
-        const dropArea = document.getElementById('drop-area');
-        const fileInput = document.getElementById('fileInput');
-        const browseButton = document.getElementById('browseButton');
-        const originalCanvas = document.getElementById('originalCanvas');
-        const convertedCanvas = document.getElementById('convertedCanvas');
-        const convertButton = document.getElementById('convertButton');
-        const downloadLink = document.getElementById('downloadLink');
-        const colorCategoryRadios = document.querySelectorAll('input[name="colorCategory"]');
-        const progressBarContainer = document.getElementById('progressBarContainer');
-        const progressBar = document.getElementById('progressBar');
-        const progressText = document.getElementById('progressText');
+    <script id="worker-script" type="javascript/worker">
+        let isCancelled = false;
+        let beadPaletteMap = {};
 
-        const originalCtx = originalCanvas.getContext('2d');
-        const convertedCtx = convertedCanvas.getContext('2d');
-
-        let currentImage = null; // 現在読み込まれている画像を保持します
-        let selectedCategory = 'all'; // 選択されているカテゴリ（初期値は「両方」）
-
-        // 事前に登録する色のデータ（RGB値とカテゴリ）
-        const allPredefinedColors = [
-            {name:"#001_ホワイト",rgb:[255,255,255], category: "NicoRate"},
-            {name:"#002_バター",rgb:[241,230,178], category: "NicoRate"},
-            {name:"#003_イエロー",rgb:[255,215,0], category: "NicoRate"},
-            {name:"#004_オレンジ",rgb:[255,130,0], category: "NicoRate"},
-            {name:"#005_レッド",rgb:[239,51,64], category: "NicoRate"},
-            {name:"#006_ピンク",rgb:[223,122,153], category: "NicoRate"},
-            {name:"#007_パープル",rgb:[78,0,142], category: "NicoRate"},
-            {name:"#008_ダークブルー",rgb:[0,35,156], category: "NicoRate"},
-            {name:"#009_ブルー",rgb:[0,156,222], category: "NicoRate"},
-            {name:"#010_グリーン",rgb:[0,150,94], category: "NicoRate"},
-            {name:"#011_ペパーミント",rgb:[113,219,212], category: "NicoRate"},
-            {name:"#012_ダークブラウン",rgb:[92,61,49], category: "NicoRate"},
-            {name:"#013_グレー",rgb:[167,168,170], category: "NicoRate"},
-            {name:"#014_ブラック",rgb:[0,0,0], category: "NicoRate"},
-            {name:"#016_ブラウン",rgb:[153,85,43], category: "NicoRate"},
-            {name:"#017_コーヒーブラウン",rgb:[152,106,76], category: "NicoRate"},
-            {name:"#018_ネールピンク",rgb:[236,195,178], category: "NicoRate"},
-            {name:"#019_ライトブラウン",rgb:[198,169,146], category: "NicoRate"},
-            {name:"#020_マゼンタ",rgb:[239,75,129], category: "NicoRate"},
-            {name:"#025_ヒヤシンス",rgb:[72,159,223], category: "NicoRate"},
-            {name:"#026_ミントグリーン",rgb:[128,224,167], category: "NicoRate"},
-            {name:"#027_ラベンダー",rgb:[191,155,222], category: "NicoRate"},
-            {name:"#028_レモンイエロー",rgb:[242,240,161], category: "NicoRate"},
-            {name:"#029_チーズ",rgb:[255,181,0], category: "NicoRate"},
-            {name:"#030_ペールパステルブルー",rgb:[185,217,235], category: "NicoRate"},
-            {name:"#031_コーラルレッド",rgb:[255,109,106], category: "NicoRate"},
-            {name:"#032_ローズパープル",rgb:[191,77,165], category: "NicoRate"},
-            {name:"#033_ライムグリーン",rgb:[122,204,0], category: "NicoRate"},
-            {name:"#034_セルリアンブルー",rgb:[0,169,224], category: "NicoRate"},
-            {name:"#035_パステルダークベージュ",rgb:[255,157,162], category: "NicoRate"},
-            {name:"#036_ラピスラズリ",rgb:[131,141,200], category: "NicoRate"},
-            {name:"#038_さくらいろ",rgb:[244,166,215], category: "NicoRate"},
-            {name:"#039_アップルグリーン",rgb:[121,190,112], category: "NicoRate"},
-            {name:"#040_ダークローズ",rgb:[215,67,136], category: "NicoRate"},
-            {name:"#041_ラズベリー",rgb:[172,20,90], category: "NicoRate"},
-            {name:"#042_コバルトブルー",rgb:[8,87,195], category: "NicoRate"},
-            {name:"#043_キャラメル",rgb:[244,175,35], category: "NicoRate"},
-            {name:"#044_パロットグリーン",rgb:[0,133,120], category: "NicoRate"},
-            {name:"#045_カラスブラック",rgb:[83,86,90], category: "NicoRate"},
-            {name:"#046_マリンブルー",rgb:[137,171,227], category: "NicoRate"},
-            {name:"#047_マルーンブラウン",rgb:[124,37,41], category: "NicoRate"},
-            {name:"#048_キウイ",rgb:[214,232,101], category: "NicoRate"},
-            {name:"#049_ベージュ",rgb:[241,202,173], category: "NicoRate"},
-            {name:"#050_ローシェンナ",rgb:[220,134,51], category: "NicoRate"},
-            {name:"#070_ダークブラック",rgb:[33,39,33], category: "NicoRate"},
-            {name:"#071_サファイアブルー",rgb:[0,87,183], category: "NicoRate"},
-            {name:"#072_べにひいろ",rgb:[255,88,93], category: "NicoRate"},
-            {name:"#073_ザクロ",rgb:[238,39,55], category: "NicoRate"},
-            {name:"#074_ハナカイドウ",rgb:[252,155,179], category: "NicoRate"},
-            {name:"#075_みずいろ",rgb:[164,219,232], category: "NicoRate"},
-            {name:"#076_アイスミントグリーン",rgb:[185,220,210], category: "NicoRate"},
-            {name:"#077_アイボリー",rgb:[248,245,227], category: "NicoRate"},
-            {name:"#078_ナイルグリーン",rgb:[91,197,0], category: "NicoRate"},
-            {name:"#079_ゴールデンイエロー",rgb:[241,196,0], category: "NicoRate"},
-            {name:"#080_ネイビーブルー",rgb:[3,37,126], category: "NicoRate"},
-            {name:"#081_ペールベージュ",rgb:[255,226,198], category: "NicoRate"},
-            {name:"#082_セレストブルー",rgb:[98,181,229], category: "NicoRate"},
-            {name:"#083_ダークグレー",rgb:[136,139,141], category: "NicoRate"},
-            {name:"#084_ダークグリーン",rgb:[0,73,30], category: "NicoRate"},
-            {name:"#085_はだいろ",rgb:[252,200,155], category: "NicoRate"},
-            {name:"#086_ペールレッド",rgb:[233,205,208], category: "NicoRate"},
-            {name:"#087_ペールグレー",rgb:[208,208,206], category: "NicoRate"},
-            {name:"#088_ペールホワイト",rgb:[221,218,232], category: "NicoRate"},
-            {name:"#089_ペールパープル",rgb:[197,180,227], category: "NicoRate"},
-            {name:"#090_クロッカス",rgb:[198,161,207], category: "NicoRate"},
-            {name:"#091_あおむらさきいろ",rgb:[33,21,81], category: "NicoRate"},
-            {name:"#092_ダークレッド",rgb:[193,0,22], category: "NicoRate"},
-            {name:"#093_カーマイン",rgb:[246,117,153], category: "NicoRate"},
-            {name:"#094_バラ",rgb:[218,24,132], category: "NicoRate"},
-            {name:"#095_ピーチ",rgb:[242,119,198], category: "NicoRate"},
-            {name:"#096_マリーゴールド",rgb:[255,143,28], category: "NicoRate"},
-            {name:"#097_ペールオレンジ",rgb:[255,174,98], category: "NicoRate"},
-            {name:"#098_ジンジャーイエロー",rgb:[222,184,59], category: "NicoRate"},
-            {name:"#099_オリーブ",rgb:[83,84,53], category: "NicoRate"},
-            {name:"#100_ティファニーブルー",rgb:[100,204,201], category: "NicoRate"},
-            {name:"#101_イエローオーカー",rgb:[180,126,0], category: "NicoRate"},
-            {name:"#102_ダークベージュ",rgb:[212,173,103], category: "NicoRate"},
-            {name:"#103_ライトベージュ",rgb:[247,206,215], category: "NicoRate"},
-            {name:"#104_ワスレナグサ",rgb:[165,176,227], category: "NicoRate"},
-            {name:"#105_しょうぶいろ",rgb:[193,167,226], category: "NicoRate"},
-            {name:"#106_しこんいろ",rgb:[205,63,173], category: "NicoRate"},
-            {name:"#107_パンジー",rgb:[128,39,108], category: "NicoRate"},
-            {name:"#108_バイオレット",rgb:[40,0,113], category: "NicoRate"},
-            {name:"#109_イエローベージュ",rgb:[253,208,134], category: "NicoRate"},
-            {name:"#110_フラミンゴ",rgb:[255,160,106], category: "NicoRate"},
-            {name:"#111_スターバックス",rgb:[29,105,96], category: "NicoRate"},
-            {name:"#112_カーネーション",rgb:[249,159,201], category: "NicoRate"},
-            {name:"#113_シアン",rgb:[0,166,200], category: "NicoRate"},
-            {name:"#114_キャメルブラウン",rgb:[191,153,114], category: "NicoRate"},
-            {name:"#115_ココナッツブラウン",rgb:[184,97,37], category: "NicoRate"},
-            {name:"#117_ピーグリーン",rgb:[167,213,0], category: "NicoRate"},
-            {name:"#118_ライトカーキ",rgb:[223,209,167], category: "NicoRate"},
-            {name:"#119_アイスグリーン",rgb:[212,235,142], category: "NicoRate"},
-            {name:"#120_ダークネイビーブルー",rgb:[34,50,110], category: "NicoRate"},
-            {name:"#121_コンクリートグレー",rgb:[187,188,188], category: "NicoRate"},
-            {name:"#122_ダークフォレストグリーン",rgb:[32,92,64], category: "NicoRate"},
-            {name:"#123_マホガニー",rgb:[170,128,102], category: "NicoRate"},
-            {name:"#124_ワインレッド",rgb:[162,0,103], category: "NicoRate"},
-            {name:"#125_パープルロータス",rgb:[152,115,172], category: "NicoRate"},
-            {name:"#126_ライトラベンダー",rgb:[200,216,235], category: "NicoRate"},
-            {name:"#127_おうどいろ",rgb:[222,188,139], category: "NicoRate"},
-            {name:"#128_ゼニスブルー",rgb:[159,174,229], category: "NicoRate"},
-            {name:"#129_チョコレートブラウン",rgb:[98,52,18], category: "NicoRate"},
-            {name:"#130_レイクブルー",rgb:[84,206,236], category: "NicoRate"},
-            {name:"#131_サクラベージュ",rgb:[245,202,191], category: "NicoRate"},
-            {name:"#132_オパールグリーン",rgb:[0,176,185], category: "NicoRate"},
-            {name:"#133_ライトグリーン",rgb:[199,233,149], category: "NicoRate"},
-            {name:"#134_メイプルレッド",rgb:[255,88,105], category: "NicoRate"},
-            {name:"#135_しゅいろ",rgb:[255,106,57], category: "NicoRate"},
-            {name:"#136_アイスミントブルー",rgb:[221,229,237], category: "NicoRate"},
-            {name:"#137_チョコブラウン",rgb:[94,75,60], category: "NicoRate"},
-            {name:"#138_コルク",rgb:[211,187,168], category: "NicoRate"},
-            {name:"#139_ピンクベージュ",rgb:[225,187,180], category: "NicoRate"},
-            {name:"#140_コーラル",rgb:[236,186,168], category: "NicoRate"},
-            {name:"#141_オリーブグリーン",rgb:[128,140,36], category: "NicoRate"},
-            {name:"#142_ベビーブルー",rgb:[177,201,232], category: "NicoRate"},
-            {name:"#143_レグホーン",rgb:[214,210,196], category: "NicoRate"},
-            {name:"#144_オイスターホワイト",rgb:[215,210,203], category: "NicoRate"},
-            {name:"#145_スカイグレー",rgb:[177,179,179], category: "NicoRate"},
-            {name:"#146_サンドホワイト",rgb:[219,200,182], category: "NicoRate"},
-            {name:"#147_スプリンググリーン",rgb:[227,233,53], category: "NicoRate"},
-            {name:"#148_チャイニーズレッド",rgb:[224,78,57], category: "NicoRate"},
-            {name:"#149_ジェイブルー",rgb:[0,75,135], category: "NicoRate"},
-            {name:"#150_ネオンイエロー",rgb:[247,234,72], category: "NicoRate"},
-            {name:"#153_ライラック",rgb:[201,177,208], category: "NicoRate"},
-            {name:"#154_サーモンピンク",rgb:[255,128,139], category: "NicoRate"},
-            {name:"#155_グレープ",rgb:[177,78,181], category: "NicoRate"},
-            {name:"#156_スカイブルー",rgb:[113,197,232], category: "NicoRate"},
-            {name:"#158_ロイヤルパープル",rgb:[135,24,157], category: "NicoRate"},
-            {name:"#159_タントンシー",rgb:[202,188,156], category: "NicoRate"},
-            {name:"#160_カフェオレブラウン",rgb:[197,139,104], category: "NicoRate"},
-            {name:"#161_ダークラベンダー",rgb:[162,120,156], category: "NicoRate"},
-            {name:"#162_ミルクティーブラウン",rgb:[165,136,119], category: "NicoRate"},
-            {name:"#163_アッシュグレー",rgb:[117,120,123], category: "NicoRate"},
-            {name:"#164_ヘーゼルブラウン",rgb:[171,152,157], category: "NicoRate"},
-            {name:"#165_シナモンブラウン",rgb:[214,128,107], category: "NicoRate"},
-            {name:"#166_エバーグリーン",rgb:[80,109,133], category: "NicoRate"},
-            {name:"#167_サンドグレー",rgb:[197,185,172], category: "NicoRate"},
-            {name:"#168_フォググレー",rgb:[190,198,196], category: "NicoRate"},
-            {name:"#169_パーチメント",rgb:[166,159,136], category: "NicoRate"},
-            {name:"#170_ライトキャラメル",rgb:[171,146,120], category: "NicoRate"},
-            {name:"#171_サンドブラウン",rgb:[193,178,162], category: "NicoRate"},
-            {name:"#172_アイビーグリーン",rgb:[146,172,160], category: "NicoRate"},
-            {name:"#173_チャコールグレー",rgb:[76,54,58], category: "NicoRate"},
-            {name:"#174_メロングリーン",rgb:[0,179,136], category: "NicoRate"},
-            {name:"#175_アイスミントライム",rgb:[181,227,216], category: "NicoRate"},
-            {name:"#191_カッパーレッド",rgb:[186,12,47], category: "NicoRate"},
-            {name:"#192_アルパイングリーン",rgb:[91,92,74], category: "NicoRate"},
-            {name:"#193_ビリジアン",rgb:[0,111,98], category: "NicoRate"},
-            {name:"#194_ピーコックグリーン",rgb:[39,153,137], category: "NicoRate"},
-            {name:"#195_レッドゴールド",rgb:[237,155,51], category: "NicoRate"},
-            {name:"#196_ミッドナイトブルー",rgb:[0,51,73], category: "NicoRate"},
-            {name:"#197_ダークスカイブルー",rgb:[0,125,186], category: "NicoRate"},
-            {name:"#198_ブルーパープル",rgb:[68,73,156], category: "NicoRate"},
-            {name:"#199_キャラメルブラウン",rgb:[164,90,42], category: "NicoRate"},
-            {name:"#200_チャコールブラック",rgb:[49,38,29], category: "NicoRate"},
-            {name:"#201_ひそくいろ",rgb:[164,188,194], category: "NicoRate"},
-            {name:"#202_ターコイズブルー",rgb:[0,133,155], category: "NicoRate"},
-            {name:"#234_ネイビー",rgb:[77,73,190], category: "NicoRate"},
-            {name:"#235_マルベリーパープル",rgb:[165,132,150], category: "NicoRate"},
-            {name:"#236_アイアングレー",rgb:[162,172,171], category: "NicoRate"},
-            {name:"#237_フクシアパープル",rgb:[207,135,157], category: "NicoRate"},
-            {name:"#238_ローズグレー",rgb:[202,167,181], category: "NicoRate"},
-            {name:"#239_ナイルブルー",rgb:[89,190,201], category: "NicoRate"},
-            {name:"#240_フォレストグリーン",rgb:[104,152,129], category: "NicoRate"},
-            {name:"#241_ベビーピンク",rgb:[222,190,210], category: "NicoRate"},
-            {name:"#242_サンフラワー",rgb:[255,200,69], category: "NicoRate"},
-            {name:"#243_ダークピンク",rgb:[205,84,91], category: "NicoRate"},
-            {name:"#244_ライトパープル",rgb:[111,121,189], category: "NicoRate"},
-            {name:"#245_シェルピンク",rgb:[232,146,124], category: "NicoRate"},
-            {name:"#246_サーモン",rgb:[219,123,81], category: "NicoRate"},
-            {name:"#247_ライトカフェオレ",rgb:[173,124,89], category: "NicoRate"},
-            {name:"#248_アンティックゴールド",rgb:[137,122,39], category: "NicoRate"},
-            // フューズビーズの色のリスト
-            {name:"A01_ホワイト",rgb:[255,255,255], category: "フューズビーズ"},
-            {name:"A02_ブラック",rgb:[0,0,0], category: "フューズビーズ"},
-            {name:"A03_タンジェリン",rgb:[246,176,76], category: "フューズビーズ"},
-            {name:"A04_オレンジ",rgb:[237,139,0], category: "フューズビーズ"},
-            {name:"A05_スイカ",rgb:[225,6,0], category: "フューズビーズ"},
-            {name:"A06_レッド",rgb:[186,12,47], category: "フューズビーズ"},
-            {name:"A07_ピンク",rgb:[241,167,220], category: "フューズビーズ"},
-            {name:"A08_ピーチ",rgb:[255,52,179], category: "フューズビーズ"},
-            {name:"A09_ローズ",rgb:[219,33,82], category: "フューズビーズ"},
-            {name:"A10_ライトイエロー",rgb:[242,240,161], category: "フューズビーズ"},
-            {name:"A11_ヨークイエロー",rgb:[255,209,0], category: "フューズビーズ"},
-            {name:"A12_ライトグリーン",rgb:[173,220,145], category: "フューズビーズ"},
-            {name:"A13_レモングリーン",rgb:[135,216,57], category: "フューズビーズ"},
-            {name:"A14_アップルグリーン",rgb:[36,158,107], category: "フューズビーズ"},
-            {name:"A15_ダークグリーン",rgb:[0,124,88], category: "フューズビーズ"},
-            {name:"A16_コーラル",rgb:[255,106,19], category: "フューズビーズ"},
-            {name:"A17_ダークコーラル",rgb:[255,103,31], category: "フューズビーズ"},
-            {name:"A18_ライトブルー",rgb:[170,220,235], category: "フューズビーズ"},
-            {name:"A19_アズールブルー",rgb:[65,182,230], category: "フューズビーズ"},
-            {name:"A20_レイクブルー",rgb:[0,144,218], category: "フューズビーズ"},
-            {name:"A21_ダークブルー",rgb:[0,51,153], category: "フューズビーズ"},
-            {name:"A22_フレッシュ",rgb:[252,191,169], category: "フューズビーズ"},
-            {name:"A23_ベージュ",rgb:[204,153,102], category: "フューズビーズ"},
-            {name:"A24_バターイエロー",rgb:[255,231,128], category: "フューズビーズ"},
-            {name:"A25_ラベンダー",rgb:[167,123,202], category: "フューズビーズ"},
-            {name:"A26_ライトパープル",rgb:[160,94,181], category: "フューズビーズ"},
-            {name:"A27_ダークパープル",rgb:[51,0,114], category: "フューズビーズ"},
-            {name:"A28_ソイルブラウン",rgb:[180,126,0], category: "フューズビーズ"},
-            {name:"A29_ライトブラウン",rgb:[164,73,61], category: "フューズビーズ"},
-            {name:"A30_バーミリオン",rgb:[122,62,44], category: "フューズビーズ"},
-            {name:"A31_ミルクチョコブラウン",rgb:[123,77,53], category: "フューズビーズ"},
-            {name:"A32_コーヒーブラウン",rgb:[92,71,56], category: "フューズビーズ"},
-            {name:"A33_ライトグレー",rgb:[155,155,155], category: "フューズビーズ"},
-            {name:"A34_ダークグレー",rgb:[118,119,119], category: "フューズビーズ"},
-            {name:"A35_シルバー",rgb:[160,159,157], category: "フューズビーズ"},
-            {name:"A36_ダークピンク",rgb:[201,128,158], category: "フューズビーズ"},
-            {name:"A37_ブルー",rgb:[20,123,209], category: "フューズビーズ"},
-            {name:"A38_トルコブルー",rgb:[105,179,231], category: "フューズビーズ"},
-            {name:"A39_ラムネ",rgb:[153,214,234], category: "フューズビーズ"},
-            {name:"A40_マスカット",rgb:[206,220,0], category: "フューズビーズ"},
-            {name:"A41_パステルイエロー",rgb:[246,235,97], category: "フューズビーズ"},
-            {name:"A42_イエロー",rgb:[250,224,83], category: "フューズビーズ"},
-            {name:"A43_クリムゾンレッド",rgb:[165,0,52], category: "フューズビーズ"},
-            {name:"A44_ライトコーラル",rgb:[255,163,139], category: "フューズビーズ"},
-            {name:"A45_メロングリーン",rgb:[93,219,93], category: "フューズビーズ"},
-            {name:"A46_レモン",rgb:[243,234,93], category: "フューズビーズ"},
-            {name:"A47_ライトベージュ",rgb:[243,207,179], category: "フューズビーズ"},
-            {name:"A48_ゴールデンイエロー",rgb:[255,199,44], category: "フューズビーズ"},
-            {name:"A49_ディープピンク",rgb:[236,134,208], category: "フューズビーズ"},
-            {name:"A50_ライトラベンダー",rgb:[197,180,227], category: "フューズビーズ"},
-            {name:"A51_アイボリー",rgb:[252,251,205], category: "フューズビーズ"},
-            {name:"A52_パープル",rgb:[74,31,135], category: "フューズビーズ"},
-            {name:"A53_ライム",rgb:[115,211,60], category: "フューズビーズ"},
-            {name:"A54_ピーコックブルー",rgb:[0,178,169], category: "フューズビーズ"},
-            {name:"A55_ジェイドグリーン",rgb:[108,194,74], category: "フューズビーズ"},
-            {name:"A56_グレー",rgb:[136,139,141], category: "フューズビーズ"},
-            {name:"A57_ブラッドレッド",rgb:[188,4,35], category: "フューズビーズ"},
-            {name:"A58_ミッドナイトブルー",rgb:[5,8,73], category: "フューズビーズ"},
-            {name:"A59_ダークレッド",rgb:[83,26,35], category: "フューズビーズ"},
-            {name:"A60_パステルアクア",rgb:[158,229,176], category: "フューズビーズ"},
-            {name:"A61_ハネデュー",rgb:[241,235,156], category: "フューズビーズ"},
-            {name:"A62_パステルレッド",rgb:[252,63,63], category: "フューズビーズ"},
-            {name:"A63_パステルパルム",rgb:[234,190,219], category: "フューズビーズ"},
-            {name:"A64_パステルベリー",rgb:[165,0,80], category: "フューズビーズ"},
-            {name:"A65_パステルオレンジ",rgb:[239,129,46], category: "フューズビーズ"},
-            {name:"A66_パステルピンク",rgb:[252,108,133], category: "フューズビーズ"},
-            {name:"A67_パステルパープル",rgb:[177,78,181], category: "フューズビーズ"},
-            {name:"A68_パステルブルー",rgb:[105,194,238], category: "フューズビーズ"},
-            {name:"A69_マットブラック",rgb:[35,40,43], category: "フューズビーズ"},
-            {name:"A70_ダークフォレストグリーン",rgb:[24,48,40], category: "フューズビーズ"},
-            {name:"A71_ブライトイエロー",rgb:[234,170,0], category: "フューズビーズ"},
-            {name:"A72_クリームチェダーイエロー",rgb:[255,197,110], category: "フューズビーズ"},
-            {name:"A73_キャラメルブラウン",rgb:[184,97,37], category: "フューズビーズ"},
-            {name:"A74_ミルクティーブラウン",rgb:[205,178,119], category: "フューズビーズ"},
-            {name:"A75_シナモンブラウン",rgb:[181,129,80], category: "フューズビーズ"},
-            {name:"A76_サーモンピンク",rgb:[255,109,106], category: "フューズビーズ"},
-            {name:"A77_コンビーフピンク",rgb:[170,87,97], category: "フューズビーズ"},
-            {name:"A78_サラミレッド",rgb:[92,19,27], category: "フューズビーズ"},
-            {name:"A79_アイスブルー",rgb:[89,213,216], category: "フューズビーズ"},
-            {name:"A80_アルノブルー",rgb:[0,174,199], category: "フューズビーズ"},
-            {name:"A81_ターコイズ",rgb:[72,169,197], category: "フューズビーズ"},
-            {name:"A82_セルリアンブルー",rgb:[0,174,214], category: "フューズビーズ"},
-            {name:"A83_コバルトブルー",rgb:[0,133,173], category: "フューズビーズ"},
-            {name:"A84_オリーブグリーン",rgb:[155,188,17], category: "フューズビーズ"},
-            {name:"A85_ダークオリーブグリーン",rgb:[153,155,48], category: "フューズビーズ"},
-            {name:"A86_ピーマングリーン",rgb:[0,133,34], category: "フューズビーズ"},
-            {name:"A87_ゴーストホワイト",rgb:[239,239,239], category: "フューズビーズ"},
-            {name:"A88_アッシュホワイト",rgb:[209,209,209], category: "フューズビーズ"},
-            {name:"A89_コンクリートグレー",rgb:[187,188,188], category: "フューズビーズ"},
-            {name:"A90_カーボングレー",rgb:[72,73,85], category: "フューズビーズ"},
-            {name:"A91_クレセントイエロー",rgb:[222,185,71], category: "フューズビーズ"},
-            {name:"A92_ペールベージュ",rgb:[218,182,152], category: "フューズビーズ"},
-            {name:"A93_ソーセージピンク",rgb:[244,169,153], category: "フューズビーズ"},
-            {name:"A94_ローズオレンジ",rgb:[238,125,103], category: "フューズビーズ"},
-            {name:"A95_アプリコットオレンジ",rgb:[240,134,97], category: "フューズビーズ"},
-            {name:"A96_キャロットオレンジ",rgb:[212,114,42], category: "フューズビーズ"},
-            {name:"A97_ヒマラヤブルー",rgb:[100,172,223], category: "フューズビーズ"},
-            {name:"A98_アカプルコブルー",rgb:[100,194,220], category: "フューズビーズ"},
-            {name:"A99_ボニーブルー",rgb:[79,159,179], category: "フューズビーズ"},
-            {name:"A100_エレクトリックブルー",rgb:[49,150,221], category: "フューズビーズ"},
-            {name:"A101_アメリカンブルー",rgb:[27,108,182], category: "フューズビーズ"},
-            {name:"A102_エンパイアブルー",rgb:[8,57,128], category: "フューズビーズ"},
-            {name:"A103_アドニスブルー",rgb:[10,102,139], category: "フューズビーズ"},
-            {name:"A104_ダークターコイズ",rgb:[8,91,110], category: "フューズビーズ"},
-            {name:"A105_ガーターブルー",rgb:[0,78,120], category: "フューズビーズ"},
-            {name:"A106_ダックブルー",rgb:[0,85,116], category: "フューズビーズ"},
-            {name:"A107_ミルキーカーキ",rgb:[204,190,128], category: "フューズビーズ"},
-            {name:"A108_パステルカーキ",rgb:[164,147,80], category: "フューズビーズ"},
-            {name:"A109_ライトカーキ",rgb:[158,136,60], category: "フューズビーズ"},
-            {name:"A110_カーキ",rgb:[118,108,43], category: "フューズビーズ"},
-            {name:"A111_ダークカーキ",rgb:[121,95,38], category: "フューズビーズ"},
-            {name:"A112_ミルキーモスグリーン",rgb:[186,184,162], category: "フューズビーズ"},
-            {name:"A113_パステルモスグリーン",rgb:[114,140,84], category: "フューズビーズ"},
-            {name:"A114_ライトモスグリーン",rgb:[126,124,68], category: "フューズビーズ"},
-            {name:"A115_モスグリーン",rgb:[100,105,46], category: "フューズビーズ"},
-            {name:"A116_ダークモスグリーン",rgb:[78,88,44], category: "フューズビーズ"},
-            {name:"A117_アイビーグリーン",rgb:[74,94,45], category: "フューズビーズ"},
-            {name:"A118_フロスティブルー",rgb:[113,196,82], category: "フューズビーズ"},
-            {name:"A119_ポーラーミント",rgb:[102,204,153], category: "フューズビーズ"},
-            {name:"A120_セラドン",rgb:[86,154,131], category: "フューズビーズ"},
-            {name:"A121_ドーミーグリーン",rgb:[20,194,91], category: "フューズビーズ"},
-            {name:"A122_パロットグリーン",rgb:[24,168,24], category: "フューズビーズ"},
-            {name:"A123_ケールグリーン",rgb:[4,85,46], category: "フューズビーズ"},
-            {name:"A124_ライトビリジアン",rgb:[19,107,90], category: "フューズビーズ"},
-            {name:"A125_ビリジアン",rgb:[5,70,65], category: "フューズビーズ"},
-            {name:"A126_ミルキーローズ",rgb:[217,182,214], category: "フューズビーズ"},
-            {name:"A127_ミルキーグレープ",rgb:[173,98,164], category: "フューズビーズ"},
-            {name:"A128_ミルキーピーチ",rgb:[230,140,163], category: "フューズビーズ"},
-            {name:"A129_フラゴナールピンク",rgb:[222,84,121], category: "フューズビーズ"},
-            {name:"A130_ミルキーラベンダー",rgb:[158,130,186], category: "フューズビーズ"},
-            {name:"A131_フラミンゴピンク",rgb:[232,65,107], category: "フューズビーズ"},
-            {name:"A132_ピンクパープル",rgb:[183,56,143], category: "フューズビーズ"},
-            {name:"A133_アメジストパープル",rgb:[88,31,126], category: "フューズビーズ"},
-            {name:"A134_ペールアイリス",rgb:[140,163,212], category: "フューズビーズ"},
-            {name:"A135_ミルキーウィステリア",rgb:[154,154,204], category: "フューズビーズ"},
-            {name:"A136_ミルキーウルトラマリン",rgb:[89,129,193], category: "フューズビーズ"},
-            {name:"A137_ライトウルトラマリン",rgb:[65,102,176], category: "フューズビーズ"},
-            {name:"A138_アガパンサスブルー",rgb:[71,95,171], category: "フューズビーズ"},
-            {name:"A139_ライトサルビアブルー",rgb:[55,69,147], category: "フューズビーズ"},
-            {name:"A140_ウルトラマリン",rgb:[61,86,165], category: "フューズビーズ"},
-            {name:"A141_ディープウルトラマリン",rgb:[41,66,153], category: "フューズビーズ"},
-            {name:"A142_サルビアブルー",rgb:[37,38,138], category: "フューズビーズ"},
-            {name:"A143_ネイビー",rgb:[26,47,111], category: "フューズビーズ"},
-            {name:"A144_ミルキーマスカット",rgb:[211,201,93], category: "フューズビーズ"},
-            {name:"A145_ワインレッド",rgb:[81,9,24], category: "フューズビーズ"},
-            {name:"A146_ライトセラドン",rgb:[100,179,158], category: "フューズビーズ"},
-            {name:"A147_チョコブラウン",rgb:[99,67,56], category: "フューズビーズ"},
-            {name:"A148_ライトバターイエロー",rgb:[237,211,158], category: "フューズビーズ"},
-            {name:"A149_ウィステリア",rgb:[105,99,171], category: "フューズビーズ"},
-            {name:"A150_ダークアイビーグリーン",rgb:[43,63,31], category: "フューズビーズ"},
-            {name:"A151_ライトウィステリア",rgb:[151,145,197], category: "フューズビーズ"},
-            {name:"A152_ホワイトウィステリア",rgb:[184,189,224], category: "フューズビーズ"},
-            {name:"A153_ミルキーベージュ",rgb:[249,200,152], category: "フューズビーズ"},
-            {name:"A154_カフェオレブラウン",rgb:[195,144,105], category: "フューズビーズ"},
-            {name:"A155_アイアングレー",rgb:[68,80,91], category: "フューズビーズ"},
-            {name:"A156_ミリタリーグレー",rgb:[62,73,85], category: "フューズビーズ"},
-            {name:"A157_チャコールブラック",rgb:[32,40,48], category: "フューズビーズ"}
-        ];
-
-        /**
-         * 2つのRGB色の間のユークリッド距離を計算します。
-         * 色の類似性を判断するために使用されます。
-         * @param {object} c1 - 最初の色 {r, g, b}
-         * @param {object} c2 - 2番目の色 {r, g, b}
-         * @returns {number} - 2つの色の間の距離
-         */
-        function colorDistance(c1, c2) {
-            return Math.sqrt(
-                Math.pow(c1.r - c2.r, 2) +
-                Math.pow(c1.g - c2.g, 2) +
-                Math.pow(c1.b - c2.b, 2)
-            );
-        }
-
-        /**
-         * カスタムメッセージボックスを表示します。
-         * @param {string} title - メッセージボックスのタイトル
-         * @param {string} message - メッセージの内容
-         */
-        function showMessageBox(title, message) {
-            const messageBox = document.createElement('div');
-            messageBox.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50';
-            messageBox.innerHTML = `
-                <div class="bg-white p-6 rounded-lg shadow-xl text-center">
-                    <p class="text-lg font-semibold text-gray-800 mb-4">${title}</p>
-                    <p class="text-gray-600 mb-6">${message}</p>
-                    <button class="px-5 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700" onclick="this.parentNode.parentNode.remove()">閉じる</button>
-                </div>
-            `;
-            document.body.appendChild(messageBox);
-        }
-
-        /**
-         * 画像ファイルを読み込み、元のキャンバスに描画します。
-         * @param {File} file - 読み込む画像ファイル
-         */
-        function loadImage(file) {
-            if (!file || !file.type.startsWith('image/')) {
-                console.error("無効なファイルタイプです。画像ファイルを選択してください。");
-                showMessageBox("無効なファイルタイプです。", "画像ファイルを選択してください。");
-                return;
+        function findClosestColor(pixel, palette) {
+            if (palette.length === 0) return null;
+            let closestColor = palette[0];
+            let minDistance = (pixel.r - closestColor.r) ** 2 + (pixel.g - closestColor.g) ** 2 + (pixel.b - closestColor.b) ** 2;
+            for (let i = 1; i < palette.length; i++) {
+                const color = palette[i];
+                const distance = (pixel.r - color.r) ** 2 + (pixel.g - color.g) ** 2 + (pixel.b - color.b) ** 2;
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestColor = color;
+                }
             }
+            return closestColor;
+        }
 
-            const reader = new FileReader();
+        function doDitheringPass(originalData, width, height, palette, ditheringStrength) {
+            const dataCopy = new Float32Array(originalData);
+            const pixelMap = new Array(width * height);
+            const counts = {};
 
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    currentImage = img; // 現在の画像を保存
+            for (let y = 0; y < height; y++) {
+                if (isCancelled) return { pixelMap: null, counts: null };
+                for (let x = 0; x < width; x++) {
+                    const i = (y * width + x);
+                    const i4 = i * 4;
+                    const oldPixel = { r: dataCopy[i4], g: dataCopy[i4 + 1], b: dataCopy[i4 + 2] };
+                    const newPixel = findClosestColor(oldPixel, palette);
+                    if (!newPixel) continue;
 
-                    // キャンバスの内部解像度を画像に合わせる
-                    originalCanvas.width = img.width;
-                    originalCanvas.height = img.height;
-                    convertedCanvas.width = img.width;
-                    convertedCanvas.height = img.height;
-
-                    // ピクセルアートのぼやけを防ぐために、画像スムージングを無効化
-                    originalCtx.imageSmoothingEnabled = false;
-                    convertedCtx.imageSmoothingEnabled = false;
-                    // ベンダープレフィックス付きのプロパティも設定 (互換性のため)
-                    originalCtx.mozImageSmoothingEnabled = false;
-                    originalCtx.webkitImageSmoothingEnabled = false;
-                    originalCtx.msImageSmoothingEnabled = false;
-                    convertedCtx.mozImageSmoothingEnabled = false;
-                    convertedCtx.webkitImageSmoothingEnabled = false;
-                    convertedCtx.msImageSmoothingEnabled = false;
-
-
-                    // 表示用のキャンバスのサイズを、コンテナの最大サイズに収まるように計算
-                    const originalCanvasContainer = originalCanvas.parentElement;
-                    const containerMaxWidth = originalCanvasContainer.offsetWidth;
-                    const containerMaxHeight = originalCanvasContainer.offsetHeight;
-
-                    const aspectRatio = img.width / img.height;
-
-                    let displayWidth;
-                    let displayHeight;
-
-                    // アスペクト比を維持しつつ、コンテナに収まる最大サイズを計算
-                    if (containerMaxWidth / containerMaxHeight > aspectRatio) {
-                        // コンテナの方が画像より横長な場合、高さに合わせてスケール
-                        displayHeight = containerMaxHeight;
-                        displayWidth = containerMaxHeight * aspectRatio;
-                    } else {
-                        // コンテナの方が画像より縦長、またはアスペクト比が同じ場合、幅に合わせてスケール
-                        displayWidth = containerMaxWidth;
-                        displayHeight = containerMaxWidth / aspectRatio;
+                    pixelMap[i] = newPixel.no;
+                    counts[newPixel.no] = (counts[newPixel.no] || 0) + 1;
+                    
+                    let errR = (oldPixel.r - newPixel.r) * ditheringStrength;
+                    let errG = (oldPixel.g - newPixel.g) * ditheringStrength;
+                    let errB = (oldPixel.b - newPixel.b) * ditheringStrength;
+                    
+                    if (x + 1 < width) {
+                        const idx = i4 + 4;
+                        dataCopy[idx] += errR * 7/16; dataCopy[idx+1] += errG * 7/16; dataCopy[idx+2] += errB * 7/16;
                     }
-
-                    // 計算された表示サイズをキャンバス要素のスタイルに適用
-                    originalCanvas.style.width = `${displayWidth}px`;
-                    originalCanvas.style.height = `${displayHeight}px`;
-                    convertedCanvas.style.width = `${displayWidth}px`;
-                    convertedCanvas.style.height = `${displayHeight}px`;
-
-
-                    // 元のキャンバスに画像を描画
-                    originalCtx.clearRect(0, 0, originalCanvas.width, originalCanvas.height);
-                    originalCtx.drawImage(img, 0, 0);
-
-                    // 変換されたキャンバスをクリア
-                    convertedCtx.clearRect(0, 0, convertedCanvas.width, convertedCanvas.height);
-
-                    // ダウンロードリンクを無効化（変換前のため）
-                    downloadLink.classList.add('opacity-50', 'pointer-events-none');
-                    downloadLink.removeAttribute('href');
-                };
-                img.onerror = () => {
-                    console.error("画像の読み込みに失敗しました。");
-                    showMessageBox("画像の読み込みに失敗しました。", "ファイルが破損しているか、サポートされていない形式です。");
-                };
-                img.src = e.target.result;
-            };
-
-            reader.onerror = () => {
-                console.error("ファイルの読み込み中にエラーが発生しました。");
-                showMessageBox("ファイルの読み込み中にエラーが発生しました。", "もう一度お試しください。");
-            };
-
-            reader.readAsDataURL(file);
-        }
-
-        /**
-         * 画像の色を事前に登録された色に変換し、変換されたキャンバスに描画します。
-         */
-        async function convertImageColors() {
-            if (!currentImage) {
-                showMessageBox("変換する画像が読み込まれていません。", "まず画像をアップロードしてください。");
-                return;
-            }
-
-            // 選択されたカテゴリに基づいて色をフィルタリング
-            const filteredColors = allPredefinedColors.filter(color => {
-                return selectedCategory === 'all' || color.category === selectedCategory;
-            }).map(color => ({ r: color.rgb[0], g: color.rgb[1], b: color.rgb[2] }));
-
-            if (filteredColors.length === 0) {
-                 showMessageBox("選択されたカテゴリに利用可能な色がありません。", "別のカテゴリを選択してください。");
-                return;
-            }
-
-            // プログレスバーを表示し、初期化
-            progressBarContainer.classList.remove('hidden');
-            progressText.classList.remove('hidden');
-            progressBar.style.width = '0%';
-            progressText.textContent = '変換中: 0%';
-
-            // 元のキャンバスからピクセルデータを取得
-            const imageData = originalCtx.getImageData(0, 0, originalCanvas.width, originalCanvas.height);
-            const data = imageData.data; // RGBA形式のピクセルデータ配列
-            const totalPixels = data.length / 4; // 全ピクセル数
-            const chunkSize = 10000; // 一度に処理するピクセル数
-            let processedPixels = 0;
-
-            // 各ピクセルを反復処理し、最も近い色に変換
-            for (let i = 0; i < data.length; i += 4) {
-                const pixelColor = {
-                    r: data[i],     // 赤
-                    g: data[i + 1], // 緑
-                    b: data[i + 2]  // 青
-                };
-
-                let minDistance = Infinity;
-                let closestColor = null;
-
-                // フィルタリングされた各色との距離を計算し、最も近い色を見つける
-                for (const predefinedColor of filteredColors) {
-                    const dist = colorDistance(pixelColor, predefinedColor);
-                    if (dist < minDistance) {
-                        minDistance = dist;
-                        closestColor = predefinedColor;
+                    if (y + 1 < height) {
+                        if (x > 0) {
+                            const idx = i4 + (width - 1) * 4;
+                            dataCopy[idx] += errR * 3/16; dataCopy[idx+1] += errG * 3/16; dataCopy[idx+2] += errB * 3/16;
+                        }
+                        const idx = i4 + width * 4;
+                        dataCopy[idx] += errR * 5/16; dataCopy[idx+1] += errG * 5/16; dataCopy[idx+2] += errB * 5/16;
+                        if (x + 1 < width) {
+                            const idx = i4 + (width + 1) * 4;
+                            dataCopy[idx] += errR * 1/16; dataCopy[idx+1] += errG * 1/16; dataCopy[idx+2] += errB * 1/16;
+                        }
                     }
                 }
-
-                // ピクセルの色を最も近い色に更新
-                if (closestColor) {
-                    data[i] = closestColor.r;
-                    data[i + 1] = closestColor.g;
-                    data[i + 2] = closestColor.b;
-                    // data[i + 3] (アルファ値) は変更しない
-                }
-
-                processedPixels++;
-
-                // 進捗を更新（定期的に、または最後に）
-                if (processedPixels % chunkSize === 0 || processedPixels === totalPixels) {
-                    const progress = Math.min(100, Math.floor((processedPixels / totalPixels) * 100));
-                    progressBar.style.width = `${progress}%`;
-                    progressText.textContent = `変換中: ${progress}%`;
-                    // UI更新のためにイベントループに制御を戻す
-                    await new Promise(resolve => setTimeout(resolve, 0));
+                if(y % 5 === 0 || y === height - 1){
+                    self.postMessage({ type: 'progress', current: y + 1, total: height, phase: 'dithering' });
                 }
             }
-
-            // 変換されたピクセルデータを変換されたキャンバスに描画
-            convertedCtx.putImageData(imageData, 0, 0);
-
-            // プログレスバーを非表示にする
-            progressBarContainer.classList.add('hidden');
-            progressText.classList.add('hidden');
-
-            // ダウンロードリンクを有効化
-            downloadLink.href = convertedCanvas.toDataURL('image/png');
-            downloadLink.classList.remove('opacity-50', 'pointer-events-none');
+            return { pixelMap, counts };
         }
 
-        // --- イベントリスナーの設定 ---
+        self.onmessage = (e) => {
+            const { type, payload } = e.data;
 
-        // ドラッグ＆ドロップ関連のイベント
-        dropArea.addEventListener('dragover', (e) => {
-            e.preventDefault(); // デフォルトの動作（リンクを開くなど）を防止
-            dropArea.classList.add('highlight'); // ハイライト表示
-        });
+            if (type === 'start') {
+                isCancelled = false;
+                try {
+                    const { imageData, width, height, mode, activePalette, map, ditheringStrength } = payload;
+                    beadPaletteMap = map;
+                    const data = new Uint8ClampedArray(imageData);
+                    let resultBuffer, resultCounts;
 
-        dropArea.addEventListener('dragleave', () => {
-            dropArea.classList.remove('highlight'); // ハイライトを解除
-        });
+                    if (mode === 'normal') {
+                        const convertedImageData = new Uint8ClampedArray(width * height * 4);
+                        const counts = {};
+                        for (let y = 0; y < height; y++) {
+                             if (isCancelled) { self.postMessage({ type: 'cancelled' }); return; }
+                             for (let x = 0; x < width; x++) {
+                                const i = (y * width + x) * 4;
+                                const pixel = { r: data[i], g: data[i+1], b: data[i+2] };
+                                const closestColor = findClosestColor(pixel, activePalette);
+                                if (closestColor) {
+                                    convertedImageData[i] = closestColor.r;
+                                    convertedImageData[i+1] = closestColor.g;
+                                    convertedImageData[i+2] = closestColor.b;
+                                    convertedImageData[i+3] = 255;
+                                    counts[closestColor.no] = (counts[closestColor.no] || 0) + 1;
+                                }
+                             }
+                             if(y % 5 === 0 || y === height - 1){
+                                self.postMessage({ type: 'progress', current: y + 1, total: height });
+                             }
+                        }
+                        resultBuffer = convertedImageData.buffer;
+                        resultCounts = counts;
+                    } else { // dithering
+                        const { pixelMap, counts: initialCounts } = doDitheringPass(data, width, height, activePalette, ditheringStrength);
+                        if (isCancelled) { self.postMessage({ type: 'cancelled' }); return; }
 
-        dropArea.addEventListener('drop', (e) => {
-            e.preventDefault(); // デフォルトの動作を防止
-            dropArea.classList.remove('highlight'); // ハイライトを解除
+                        const totalPixels = width * height;
+                        const RARE_THRESHOLD = totalPixels * 0.001;
+                        const finalCounts = { ...initialCounts };
+                        
+                        const rareColorNos = Object.keys(finalCounts).filter(no => finalCounts[no] < RARE_THRESHOLD);
+                        const commonColors = activePalette.filter(c => !rareColorNos.includes(c.no));
+                        const replacementMap = {};
 
-            const files = e.dataTransfer.files; // ドロップされたファイルを取得
-            if (files.length > 0) {
-                loadImage(files[0]); // 最初のファイルを読み込む
+                        if (commonColors.length > 0 && commonColors.length < activePalette.length) {
+                            rareColorNos.forEach(rareNo => {
+                                const rareColor = beadPaletteMap[rareNo];
+                                if (!rareColor) return;
+                                const replacementColor = findClosestColor(rareColor, commonColors);
+                                if (replacementColor) {
+                                    replacementMap[rareNo] = replacementColor.no;
+                                    finalCounts[replacementColor.no] = (finalCounts[replacementColor.no] || 0) + finalCounts[rareNo];
+                                    delete finalCounts[rareNo];
+                                }
+                            });
+                        }
+                        
+                        const convertedImageData = new Uint8ClampedArray(width * height * 4);
+                        for(let i=0; i < pixelMap.length; i++) {
+                            const originalColorNo = pixelMap[i];
+                            const finalColorNo = replacementMap[originalColorNo] || originalColorNo;
+                            const finalColor = beadPaletteMap[finalColorNo];
+                            if (finalColor) {
+                                convertedImageData[i * 4] = finalColor.r;
+                                convertedImageData[i * 4 + 1] = finalColor.g;
+                                convertedImageData[i * 4 + 2] = finalColor.b;
+                                convertedImageData[i * 4 + 3] = 255;
+                            }
+                        }
+                        resultBuffer = convertedImageData.buffer;
+                        resultCounts = finalCounts;
+                    }
+                    self.postMessage({ type: 'complete', result: { buffer: resultBuffer, counts: resultCounts } }, [resultBuffer]);
+                } catch (err) {
+                    self.postMessage({ type: 'error', message: err.message });
+                }
+            } else if (type === 'cancel') {
+                isCancelled = true;
             }
-        });
-
-        // 「ファイルを参照」ボタンのクリックイベント
-        browseButton.addEventListener('click', () => {
-            fileInput.click(); // 隠されたファイル入力フィールドをクリック
-        });
-
-        // ファイル入力フィールドの変更イベント（ファイルが選択された時）
-        fileInput.addEventListener('change', (e) => {
-            const files = e.target.files;
-            if (files.length > 0) {
-                loadImage(files[0]); // 選択されたファイルを読み込む
-            }
-        });
-
-        // ラジオボタンの変更イベント
-        colorCategoryRadios.forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                selectedCategory = e.target.value; // 選択されたカテゴリを更新
-            });
-        });
-
-        // 「色を変換」ボタンのクリックイベント
-        convertButton.addEventListener('click', convertImageColors);
-
-        // ウィンドウのロードが完了したら、初期状態を設定
-        window.onload = () => {
-             // ダウンロードリンクを初期状態で無効化
-            downloadLink.classList.add('opacity-50', 'pointer-events-none');
-            downloadLink.removeAttribute('href');
         };
+    </script>
+
+
+    <script type="module">
+    const BEADS_CSV_URL = 'https://raw.githubusercontent.com/shirobea/Beadschanger.github.io/main/BeadsColors%20-%20BeadsColors.csv';
+    
+    let beadPalette = [];
+    let beadPaletteMap = {};
+    let originalImage = null;
+    let originalAspectRatio = 1;
+    let conversionWorker = null;
+    let isConverting = false;
+
+    const dom = {
+        version: document.getElementById('app-version'),
+        uploadArea: document.getElementById('upload-area'),
+        fileInput: document.getElementById('file-input'),
+        settingsPanel: document.getElementById('settings-panel'),
+        paletteFilter: document.getElementById('palette-filter'),
+        conversionMode: document.getElementById('conversion-mode'),
+        ditheringContainer: document.getElementById('dithering-strength-container'),
+        ditheringSlider: document.getElementById('dithering-strength'),
+        widthInput: document.getElementById('width-input'),
+        heightInput: document.getElementById('height-input'),
+        resetSizeBtn: document.getElementById('reset-size-btn'),
+        convertBtn: document.getElementById('convert-btn'),
+        progressBar: document.getElementById('progress-bar'),
+        progressText: document.getElementById('progress-text'),
+        originalCanvas: document.getElementById('original-canvas'),
+        resultCanvas: document.getElementById('result-canvas'),
+        resultContainer: document.getElementById('result-container'),
+        downloadBtn: document.getElementById('download-btn'),
+        usedColorsSection: document.getElementById('used-colors-section'),
+        colorListBody: document.getElementById('color-list-body'),
+        modal: document.getElementById('modal'),
+        modalCanvas: document.getElementById('modal-canvas'),
+        modalCloseBtn: document.getElementById('close-modal-btn'),
+    };
+
+    async function initializeApp() {
+        dom.version.textContent = `v1.3.2`;
+        try {
+            await loadBeadPalette();
+            setupEventListeners();
+        } catch (error) {
+            alert(`アプリケーションの初期化に失敗しました: ${error.message}`);
+        }
+    }
+
+    async function loadBeadPalette() {
+        const rawCsvUrl = BEADS_CSV_URL.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
+        const response = await fetch(rawCsvUrl);
+        if (!response.ok) throw new Error('ビーズパレットの読み込みに失敗しました。');
+        
+        const csvText = await response.text();
+        beadPalette = csvText.trim().split(/\r?\n/).slice(1).map(row => {
+            const [no, name, r, g, b, categoryNum] = row.split(',').map(s => s.trim());
+            if (!no || !r || !g || !b ) return null;
+            const colorInfo = { no, name, r: parseInt(r), g: parseInt(g), b: parseInt(b), category: categoryNum };
+            beadPaletteMap[no] = colorInfo;
+            return colorInfo;
+        }).filter(Boolean);
+        
+        beadPalette.forEach(c => {
+             if (c.category === '0') c.categoryName = 'NicoRate';
+             else if (c.category === '1') c.categoryName = 'フューズビーズ';
+             else c.categoryName = 'その他';
+        });
+    }
+    
+    function remapPaletteForUI() {
+        const categories = [...new Set(beadPalette.map(c => c.categoryName))].filter(Boolean);
+        
+        let html = '<label class="flex items-center"><input type="radio" name="palette" value="all" class="mr-1" checked>両方</label>';
+        categories.forEach(catName => {
+            html += `<label class="flex items-center"><input type="radio" name="palette" value="${catName}" class="mr-1">${catName}</label>`;
+        });
+        dom.paletteFilter.innerHTML = html;
+    }
+
+    function setupEventListeners() {
+        ['dragover', 'dragenter'].forEach(ev => dom.uploadArea.addEventListener(ev, e => { e.preventDefault(); dom.uploadArea.classList.add('drag-over'); }));
+        ['dragleave', 'drop'].forEach(ev => dom.uploadArea.addEventListener(ev, e => { e.preventDefault(); dom.uploadArea.classList.remove('drag-over'); }));
+        dom.uploadArea.addEventListener('drop', (e) => { if (e.dataTransfer.files.length) handleImageUpload(e.dataTransfer.files[0]); });
+        dom.fileInput.addEventListener('change', (e) => { if (e.target.files.length) handleImageUpload(e.target.files[0]); });
+
+        dom.conversionMode.addEventListener('change', (e) => {
+            dom.ditheringContainer.classList.toggle('hidden', e.target.value !== 'dithering');
+        });
+
+        dom.widthInput.addEventListener('input', () => handleSizeChange('width'));
+        dom.heightInput.addEventListener('input', () => handleSizeChange('height'));
+        dom.resetSizeBtn.addEventListener('click', resetSizeInputs);
+        dom.convertBtn.addEventListener('click', toggleConversion);
+        dom.downloadBtn.addEventListener('click', downloadImage);
+        dom.originalCanvas.addEventListener('click', () => !isConverting && originalImage && showModal(dom.originalCanvas));
+        dom.resultCanvas.addEventListener('click', () => !isConverting && dom.resultCanvas.width > 1 && showModal(dom.resultCanvas));
+        dom.modal.addEventListener('click', (e) => { if (e.target === dom.modal) closeModal(); });
+        dom.modalCloseBtn.addEventListener('click', closeModal);
+        remapPaletteForUI();
+    }
+
+    function setUIState(converting, wasCancelled = false) {
+        isConverting = converting;
+        document.querySelectorAll('#settings-panel input, #settings-panel button').forEach(el => el.disabled = converting);
+
+        if (converting) {
+            dom.convertBtn.textContent = '変換を中止';
+            dom.convertBtn.classList.replace('bg-blue-500', 'bg-red-500');
+            dom.convertBtn.classList.replace('hover:bg-blue-600', 'hover:bg-red-600');
+            dom.convertBtn.disabled = false;
+        } else {
+            dom.convertBtn.textContent = '変換実行';
+            dom.convertBtn.classList.replace('bg-red-500', 'bg-blue-500');
+            dom.convertBtn.classList.replace('hover:bg-red-600', 'hover:bg-blue-600');
+            dom.progressText.textContent = wasCancelled ? '中止しました' : (dom.resultCanvas.width > 1 ? '完了' : '');
+            dom.downloadBtn.disabled = (dom.resultCanvas.width <= 1);
+        }
+    }
+
+    function updateProgress(current, total) {
+        let percent = total > 0 ? Math.floor((current / total) * 100) : 0;
+        dom.progressBar.style.width = `${percent}%`;
+        dom.progressText.textContent = `変換中... ${percent}%`;
+    }
+    
+    function handleImageUpload(file) {
+        const ctx = dom.resultCanvas.getContext('2d');
+        ctx.clearRect(0, 0, dom.resultCanvas.width, dom.resultCanvas.height);
+        dom.resultCanvas.width = 1;
+        dom.resultCanvas.height = 1;
+        dom.downloadBtn.disabled = true;
+        dom.usedColorsSection.classList.add('hidden');
+        dom.progressText.textContent = '';
+        dom.progressBar.style.width = '0%';
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            originalImage = new Image();
+            originalImage.onload = () => {
+                originalAspectRatio = originalImage.width / originalImage.height;
+                drawToCanvas(dom.originalCanvas, originalImage);
+                resetSizeInputs();
+                dom.settingsPanel.classList.remove('disabled-panel');
+                dom.settingsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            };
+            originalImage.onerror = () => alert('画像ファイルの読み込みに失敗しました。');
+            originalImage.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+    
+    function drawToCanvas(canvas, imageSource) {
+        const ctx = canvas.getContext('2d');
+        canvas.width = imageSource.width;
+        canvas.height = imageSource.height;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        if (imageSource instanceof ImageData) {
+            ctx.putImageData(imageSource, 0, 0);
+        } else {
+            ctx.drawImage(imageSource, 0, 0, canvas.width, canvas.height);
+        }
+    }
+
+    function handleSizeChange(changed) {
+        if (!originalImage) return;
+        const width = parseInt(dom.widthInput.value);
+        const height = parseInt(dom.heightInput.value);
+        if (changed === 'width' && width > 0) dom.heightInput.value = Math.round(width / originalAspectRatio) || 1;
+        else if (changed === 'height' && height > 0) dom.widthInput.value = Math.round(height * originalAspectRatio) || 1;
+    }
+
+    function resetSizeInputs() {
+        if (originalImage) {
+            dom.widthInput.value = originalImage.width;
+            dom.heightInput.value = originalImage.height;
+        }
+    }
+
+    function killWorker() {
+        if (conversionWorker) {
+            conversionWorker.postMessage({ type: 'cancel' });
+            conversionWorker.terminate();
+            conversionWorker = null;
+        }
+    }
+
+    function toggleConversion() {
+        if (isConverting) {
+            killWorker();
+            setUIState(false, true);
+        } else {
+            startConversion();
+        }
+    }
+
+    function startConversion() {
+        if (!originalImage) return alert('最初に画像をアップロードしてください。');
+        if (!beadPalette || beadPalette.length === 0) return alert('ビーズパレットが読み込まれていません。');
+        
+        const width = parseInt(dom.widthInput.value);
+        const height = parseInt(dom.heightInput.value);
+        if (!(width > 0 && height > 0)) return alert('有効な変換後サイズを指定してください。');
+        
+        setUIState(true);
+        updateProgress(0, 100);
+        dom.usedColorsSection.classList.add('hidden');
+
+        const tempCtx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+        tempCtx.canvas.width = width;
+        tempCtx.canvas.height = height;
+        tempCtx.drawImage(originalImage, 0, 0, width, height);
+        const imageData = tempCtx.getImageData(0, 0, width, height);
+        
+        dom.resultCanvas.width = width;
+        dom.resultCanvas.height = height;
+        
+        killWorker();
+        const workerScript = document.getElementById('worker-script').textContent;
+        conversionWorker = new Worker(URL.createObjectURL(new Blob([workerScript])));
+
+        conversionWorker.onmessage = (e) => {
+            const { type, result, current, total, phase, message } = e.data;
+            switch (type) {
+                case 'progress':
+                    updateProgress(current, total, phase);
+                    break;
+                case 'complete':
+                    const finalImageData = new ImageData(new Uint8ClampedArray(result.buffer), width, height);
+                    drawToCanvas(dom.resultCanvas, finalImageData);
+                    displayColorList(result.counts);
+                    setUIState(false);
+                    killWorker();
+                    dom.resultContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    break;
+                case 'cancelled':
+                    setUIState(false, true);
+                    break;
+                case 'error':
+                    alert(`変換エラー: ${message}`);
+                    setUIState(false);
+                    killWorker();
+                    break;
+            }
+        };
+        conversionWorker.onerror = (err) => {
+            alert(`ワーカーで致命的なエラーが発生しました: ${err.message}`);
+            setUIState(false);
+            killWorker();
+        };
+
+        const paletteFilterValue = dom.paletteFilter.querySelector('input:checked').value;
+        const activePalette = beadPalette.filter(c => paletteFilterValue === 'all' || c.categoryName === paletteFilterValue);
+        
+        if (activePalette.length === 0) {
+            alert('選択された条件に合うビーズがありません。');
+            setUIState(false);
+            return;
+        }
+        
+        const payload = {
+            imageData: imageData.data.buffer,
+            width, height,
+            mode: dom.conversionMode.querySelector('input:checked').value,
+            ditheringStrength: parseFloat(dom.ditheringSlider.value),
+            activePalette,
+            map: beadPaletteMap,
+        };
+        conversionWorker.postMessage({ type: 'start', payload }, [payload.imageData]);
+    }
+
+    function displayColorList(colorCounts) {
+        if (!colorCounts || Object.keys(colorCounts).length === 0) {
+            dom.usedColorsSection.classList.add('hidden');
+            return;
+        }
+        const countsArray = Object.entries(colorCounts).map(([no, count]) => ({
+            ...(beadPaletteMap[no]), count
+        }));
+
+        countsArray.sort((a, b) => b.count - a.count);
+        dom.colorListBody.innerHTML = '';
+        countsArray.forEach(color => {
+            if (!color) return;
+            const hex = `rgb(${color.r}, ${color.g}, ${color.b})`;
+            const row = `
+                <tr class="bg-white border-b hover:bg-slate-50">
+                    <td class="px-2 py-2"><div class="w-6 h-6 rounded-full border border-slate-300 mx-auto" style="background-color: ${hex};"></div></td>
+                    <td class="px-2 py-2 font-medium text-slate-900 text-center">${color.no}</td>
+                    <td class="px-2 py-2 truncate mobile-hidden">${color.name}</td>
+                    <td class="px-2 py-2 text-right">${color.count.toLocaleString()}</td>
+                </tr>`;
+            dom.colorListBody.insertAdjacentHTML('beforeend', row);
+        });
+        dom.usedColorsSection.classList.remove('hidden');
+    }
+
+    function downloadImage() {
+        if (dom.resultCanvas.width <= 1) return;
+        const link = document.createElement('a');
+        link.download = 'bead-art.png';
+        link.href = dom.resultCanvas.toDataURL('image/png');
+        link.click();
+    }
+    
+    function showModal(sourceCanvas) {
+        if (sourceCanvas.width <= 1 || sourceCanvas.height <= 1) return;
+        const modalCanvasCtx = dom.modalCanvas.getContext('2d');
+        modalCanvasCtx.imageSmoothingEnabled = false; 
+
+        dom.modalCanvas.width = sourceCanvas.width;
+        dom.modalCanvas.height = sourceCanvas.height;
+        modalCanvasCtx.fillStyle = '#FFFFFF';
+        modalCanvasCtx.fillRect(0, 0, dom.modalCanvas.width, dom.modalCanvas.height);
+        modalCanvasCtx.drawImage(sourceCanvas, 0, 0);
+
+        const modalAspectRatio = sourceCanvas.width / sourceCanvas.height;
+        const screenWidth = window.innerWidth;
+        const screenHeight = window.innerHeight;
+        let displayWidth = screenWidth * 0.9;
+        let displayHeight = displayWidth / modalAspectRatio;
+
+        if (displayHeight > screenHeight * 0.9) {
+            displayHeight = screenHeight * 0.9;
+            displayWidth = displayHeight * modalAspectRatio;
+        }
+
+        dom.modalCanvas.style.width = `${displayWidth}px`;
+        dom.modalCanvas.style.height = `${displayHeight}px`;
+        dom.modal.classList.replace('hidden', 'flex');
+    }
+
+    function closeModal() {
+        dom.modal.classList.replace('flex', 'hidden');
+    }
+
+    initializeApp();
     </script>
 </body>
 </html>
