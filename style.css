@@ -1,0 +1,65 @@
+html {
+    scroll-behavior: smooth;
+}
+body {
+        font-family: 'M PLUS Rounded 1c', sans-serif;
+        background-color: #f8fafc;
+    }
+    canvas {
+        image-rendering: -moz-crisp-edges;
+        image-rendering: -webkit-crisp-edges;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+        /* [FIX] Set background to white by default */
+        background-color: white;
+    }
+    .preview-aspect-ratio {
+        width: 100%;
+        height: auto;
+        max-height: 400px;
+        object-fit: contain;
+    }
+    .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
+    .drag-over { border-color: #3b82f6; background-color: #eff6ff; }
+    .disabled-panel { opacity: 0.5; pointer-events: none; }
+    /* 画像アップロード枠の高さを変換設定パネルと揃える */
+    #upload-area {
+        min-height: 340px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    /* サイズ入力欄の幅を狭める */
+    #width-input, #height-input {
+        max-width: 80px;
+        min-width: 0;
+    }
+    /* 使用色リストの行の状態ごとの色分け */
+    #color-list-body tr {
+        transition: background 0.15s, color 0.15s;
+    }
+    #color-list-body tr.selected-row {
+        background-color: #2563eb !important; /* 濃い青 */
+        color: #fff;
+    }
+    #color-list-body tr.selected-row:hover {
+        background-color: #60a5fa !important; /* 少し薄い青 */
+        color: #fff;
+    }
+    #color-list-body tr:not(.selected-row):hover {
+        background-color: #e0e7ef !important; /* さらに薄い青 */
+        color: #222;
+    }
+    #color-list-body tr:not(.selected-row) {
+        background-color: #fff !important; /* 未選択: 白 */
+        color: #222;
+    }
+    @media (max-width: 640px) {
+        .mobile-hidden {
+            display: none;
+        }
+    }
+/* エラー修正: </style> タグはCSSファイルには不要なので削除しました */
