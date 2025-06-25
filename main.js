@@ -41,6 +41,7 @@ const dom = {
     modalCloseBtn: document.getElementById('close-modal-btn'),
     aspectLock: document.getElementById('aspect-lock'),
     clearFilterBtn: document.getElementById('clear-filter-btn'),
+    gridCheckbox: document.getElementById('show-grid'),
 };
 
 // ... 以降、index.htmlの<script type="module"> ... </script>の全コードをそのまま貼り付け ...
@@ -51,3 +52,53 @@ const dom = {
 // appState.conversionWorker = new Worker('worker.js');
 
 // ...（残りのコードはindex.htmlの該当部分をそのまま移植）... 
+
+// グリッド線の描画関数
+function drawGrid(ctx, width, height, cellSize, lineWidth) {
+    ctx.save();
+    ctx.strokeStyle = '#222';
+    ctx.lineWidth = lineWidth;
+    // 縦線
+    for (let x = 0; x <= width; x += cellSize) {
+        ctx.beginPath();
+        ctx.moveTo(x + 0.5, 0);
+        ctx.lineTo(x + 0.5, height);
+        ctx.stroke();
+    }
+    // 横線
+    for (let y = 0; y <= height; y += cellSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y + 0.5);
+        ctx.lineTo(width, y + 0.5);
+        ctx.stroke();
+    }
+    ctx.restore();
+}
+
+// drawFilteredResultを拡張
+function drawFilteredResult() {
+    if (!appState.resultImageData || !appState.resultWidth || !appState.resultHeight) return;
+    const cellSize = 10;
+    const canvas = dom.resultCanvas;
+    const ctx = canvas.getContext('2d');
+    // 拡大表示用にcanvasサイズを変更
+    canvas.width = appState.resultWidth * cellSize;
+    canvas.height = appState.resultHeight * cellSize;
+    // 一時キャンバスで元画像を作成
+    const temp = document.createElement('canvas');
+    temp.width = appState.resultWidth;
+    temp.height = appState.resultHeight;
+    temp.getContext('2d').putImageData(appState.resultImageData, 0, 0);
+    // 拡大描画
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(temp, 0, 0, canvas.width, canvas.height);
+    // グリッド線表示
+    if (dom.gridCheckbox && dom.gridCheckbox.checked) {
+        drawGrid(ctx, canvas.width, canvas.height, cellSize, 1);
+    }
+}
+
+// グリッド表示切り替えイベント
+if (dom.gridCheckbox) {
+    dom.gridCheckbox.addEventListener('change', drawFilteredResult);
+} 
