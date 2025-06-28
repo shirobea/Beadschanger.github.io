@@ -1071,6 +1071,10 @@
                         const r = src[i], g = src[i + 1], b = src[i + 2], a = src[i + 3];
                         ctx.fillStyle = `rgba(${r},${g},${b},${a/255})`;
                         ctx.fillRect(x * scale, y * scale, scale, scale);
+                        
+                        // 右下角に1ピクセルの点を描画
+                        ctx.fillStyle = gridColor;
+                        ctx.fillRect((x + 1) * scale, (y + 1) * scale, 1, 1);
                     }
                 }
             }
@@ -1272,6 +1276,12 @@
                     }
                     ctx.fillStyle = show ? `rgba(${r},${g},${b},${a/255})` : '#fff';
                     ctx.fillRect(x*scale, y*scale, scale, scale);
+                    
+                    // 右下角に1ピクセルの点を描画
+                    if (show) {
+                        ctx.fillStyle = '#000'; // グリッド線と同じ色
+                        ctx.fillRect((x + 1) * scale, (y + 1) * scale, 1, 1);
+                    }
                 }
             }
         } else {
@@ -1337,6 +1347,10 @@
                         const r = src[i], g = src[i + 1], b = src[i + 2], a = src[i + 3];
                         ctx.fillStyle = `rgba(${r},${g},${b},${a/255})`;
                         ctx.fillRect(x * scale, y * scale, scale, scale);
+                        
+                        // 右下角に1ピクセルの点を描画
+                        ctx.fillStyle = gridColor;
+                        ctx.fillRect((x + 1) * scale, (y + 1) * scale, 1, 1);
                     }
                 }
             }
